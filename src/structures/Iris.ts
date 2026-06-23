@@ -96,8 +96,16 @@ export class Iris {
 		return { close: this.closed, value: this.value };
 	}
 
-	public async setValue(value: number) {
-		await this.client.property.setValue({ params: [{ [Iris.PropertyName]: value }] });
+	public async setValue(value: number, closed = this.closed) {
+		await this.client.property.setValue({
+			params: [{ [Iris.PropertyName]: value, 'Camera.Iris.Close.Enabled': closed }],
+		});
+	}
+
+	public async setClosed(closed: boolean) {
+		await this.client.property.setValue({
+			params: [{ [Iris.PropertyName]: this.value, 'Camera.Iris.Close.Enabled': closed }],
+		});
 	}
 
 	public async fetchStatus() {

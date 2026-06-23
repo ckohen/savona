@@ -1,13 +1,15 @@
 import type { SavonaClient, SavonaRequestOptions } from '../savona.js';
 
+export type SavonaPropertySelector = string[] | string | null;
+
 export class SavonaProperty {
 	public constructor(public client: SavonaClient) {}
 
-	public async getStatus(options: SavonaRequestOptions<[Record<string, [string] | null>]>) {
+	public async getStatus(options: SavonaRequestOptions<[Record<string, SavonaPropertySelector>]>) {
 		return this.client.request('Property.GetStatus', options);
 	}
 
-	public async getValue(options: SavonaRequestOptions<[Record<string, [string] | null>]>) {
+	public async getValue(options: SavonaRequestOptions<[Record<string, SavonaPropertySelector>]>) {
 		return this.client.request('Property.GetValue', options);
 	}
 

@@ -58,6 +58,7 @@ export class ND {
 		}
 
 		this.value = responseValue.cam as number;
+		result.value = this.value;
 		if (
 			'Camera.NDFilter.Enabled' in response &&
 			typeof response['Camera.NDFilter.Enabled'] === 'object' &&

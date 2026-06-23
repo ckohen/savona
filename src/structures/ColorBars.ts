@@ -32,7 +32,7 @@ export class ColorBars {
 		client.notifications.propertyValueChanged.on('Camera.ColorBar.Type', async (data) => {
 			this.type = data as string;
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pxw-f5x.Event.EventID', async (data) => {
+		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
 			if (
 				[
 					EVENT_PLAY_UPDATE,
@@ -82,10 +82,13 @@ export class ColorBars {
 		return responseValue;
 	}
 
-	public async setValue({ enabed, type }: { enabed?: boolean | undefined; type?: string | undefined } = {}) {
+	public async setValue({
+		enabled,
+		type,
+	}: { enabled?: boolean | undefined; type?: string | undefined } = {}) {
 		const params: Record<string, boolean | string> = {};
-		if (enabed !== undefined) {
-			params[ColorBars.PropertyName] = enabed;
+		if (enabled !== undefined) {
+			params[ColorBars.PropertyName] = enabled;
 		}
 
 		if (type !== undefined) {

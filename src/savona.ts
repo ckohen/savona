@@ -19,9 +19,11 @@ import { LinearClient, LinearEvent, WebsocketState, type LinearRequestParams } f
 import { AssignableButtons } from './structures/AssignableButtons.js';
 import { Audio } from './structures/Audio.js';
 import { AutoBlackBalance } from './structures/AutoBlackBalance.js';
+import { AutoUpload } from './structures/AutoUpload.js';
 import { Buttons } from './structures/Buttons.js';
 import { ClipInfo } from './structures/ClipInfo.js';
 import { ColorBars } from './structures/ColorBars.js';
+import { DeviceInfo } from './structures/DeviceInfo.js';
 import { Focus } from './structures/Focus.js';
 import { Gain } from './structures/Gain.js';
 import { GlobalStatus } from './structures/GlobalStatus.js';
@@ -29,10 +31,16 @@ import { Iris } from './structures/Iris.js';
 import { LensMount } from './structures/LensMount.js';
 import { MainBattery } from './structures/MainBattery.js';
 import { MainFile } from './structures/MainFile.js';
+import { MediaCards } from './structures/MediaCard.js';
 import { ND } from './structures/ND.js';
+import { Record } from './structures/Record.js';
 import { Shutter } from './structures/Shutter.js';
 import { SlowAndQuick } from './structures/SlowAndQuick.js';
 import { SystemConfig } from './structures/SystemConfig.js';
+import { SystemFunctions } from './structures/SystemFunctions.js';
+import { SystemMessages } from './structures/SystemMessages.js';
+import { UploadJobs } from './structures/UploadJobs.js';
+import { UploadSettings } from './structures/UploadSettings.js';
 import { WhiteBalance } from './structures/WhiteBalance.js';
 import { Zoom } from './structures/Zoom.js';
 
@@ -113,6 +121,8 @@ export interface SavonaNotificationEvents {
 	[name: string]: [data: unknown];
 }
 
+const NotificationSubscriptions = ['Notify.Properties', 'Notify.Process', 'Notify.Property', 'Notify.Capability'];
+
 export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	public version = '2.7.1';
 
@@ -143,12 +153,17 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		raw: new AsyncEventEmitter<SavonaNotificationEvents>(),
 		propertyValueChanged: new AsyncEventEmitter<SavonaNotificationEvents>(),
 		propertyStatusChanged: new AsyncEventEmitter<SavonaNotificationEvents>(),
+		propertyErrorOccurred: new AsyncEventEmitter<SavonaNotificationEvents>(),
+		capabilitiesChanged: new AsyncEventEmitter<SavonaNotificationEvents>(),
+		capabilityValueChanged: new AsyncEventEmitter<SavonaNotificationEvents>(),
 		process: new AsyncEventEmitter<SavonaNotificationEvents>(),
 	} as const;
 
 	public assignableButtons = new AssignableButtons(this);
 
 	public audio = new Audio(this);
+
+	public autoUpload = new AutoUpload(this);
 
 	public autoBlackBalance = new AutoBlackBalance(this);
 
@@ -157,6 +172,8 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	public clipInfo = new ClipInfo(this);
 
 	public colorBars = new ColorBars(this);
+
+	public deviceInfo = new DeviceInfo(this);
 
 	public focus = new Focus(this);
 
@@ -172,13 +189,25 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 
 	public mainFile = new MainFile(this);
 
+	public mediaCards = new MediaCards(this);
+
 	public ND = new ND(this);
+
+	public record = new Record(this);
 
 	public shutter = new Shutter(this);
 
 	public slowAndQuick = new SlowAndQuick(this);
 
 	public systemConfig = new SystemConfig(this);
+
+	public systemFunctions = new SystemFunctions(this);
+
+	public systemMessages = new SystemMessages(this);
+
+	public uploadJobs = new UploadJobs(this);
+
+	public uploadSettings = new UploadSettings(this);
 
 	public whiteBalance = new WhiteBalance(this);
 
@@ -218,6 +247,10 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		return this.linear.state;
 	}
 
+	public get httpBaseURL() {
+		return `http${this.useSSL ? 's' : ''}://${this.hostname}`;
+	}
+
 	public async connect(timeout?: number) {
 		this.isManualDisconnect = false;
 		await this.linear.connect(timeout);
@@ -247,11 +280,11 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	}
 
 	private async _subscribe() {
-		await this.notify.subscribe({ params: [['Notify.Properties', 'Notify.Process', 'Notify.Property']] });
+		await this.notify.subscribe({ params: [NotificationSubscriptions] });
 	}
 
 	private async _unsubscribe() {
-		await this.notify.unsubscribe({ params: [['Notify.Properties', 'Notify.Process', 'Notify.Property']] });
+		await this.notify.unsubscribe({ params: [NotificationSubscriptions] });
 	}
 
 	private async onConnect() {
@@ -334,10 +367,38 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 				break;
 			}
 
+			case 'Notify.Property.ErrorOccurred': {
+				if (typeof notificationData !== 'object' || notificationData === null) return;
+				for (const [key, value] of Object.entries(notificationData)) {
+					this.notifications.propertyErrorOccurred.emit(key, value);
+				}
+
+				break;
+			}
+
+			case 'Notify.Capabilities.Changed': {
+				if (typeof notificationData !== 'object' || notificationData === null) return;
+				for (const [key, value] of Object.entries(notificationData)) {
+					this.notifications.capabilitiesChanged.emit(key, value);
+				}
+
+				break;
+			}
+
+			case 'Notify.Capability.Value.Changed': {
+				if (typeof notificationData !== 'object' || notificationData === null) return;
+				for (const [key, value] of Object.entries(notificationData)) {
+					this.notifications.capabilityValueChanged.emit(key, value);
+				}
+
+				break;
+			}
+
 			case 'Notify.Process.ErrorOccurred':
 			case 'Notify.Process.Completed':
 			case 'Notify.Process.Started':
-			case 'Notify.Process.Aborted': {
+			case 'Notify.Process.Aborted':
+			case 'Notify.Process.Updated': {
 				const eventName = name.split('.')[2] as string;
 				this.notifications.process.emit(eventName, notificationData);
 				break;

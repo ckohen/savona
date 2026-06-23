@@ -9,6 +9,8 @@ export class MainBattery {
 
 	public minute: number = -1;
 
+	public display: 'minute' | 'percent' | 'voltage' | 0 = 0;
+
 	public constructor(public client: SavonaClient) {
 		client.notifications.propertyValueChanged.on('System.Battery.Active.Type', (data) => {
 			this.type = data as 'Battery' | 'DC';
@@ -22,6 +24,9 @@ export class MainBattery {
 		client.notifications.propertyValueChanged.on('System.Battery.Active.Remain.Voltage', (data) => {
 			this.voltage = data as number;
 		});
+		client.notifications.propertyValueChanged.on('System.Battery.Active.Remain.Display', (data) => {
+			this.display = data as 'minute' | 'percent' | 'voltage' | 0;
+		});
 	}
 
 	public async fetchValue() {
@@ -32,6 +37,7 @@ export class MainBattery {
 					'System.Battery.Active.Remain.Percentage': ['*'],
 					'System.Battery.Active.Remain.Minute': ['*'],
 					'System.Battery.Active.Remain.Voltage': ['*'],
+					'System.Battery.Active.Remain.Display': ['*'],
 				},
 			],
 		});
@@ -39,7 +45,13 @@ export class MainBattery {
 			throw new Error('Response does not match expected format');
 		}
 
-		const repsonseValue: { minute?: number; percentage?: number; type?: string; voltage?: number } = {};
+		const repsonseValue: {
+			display?: 'minute' | 'percent' | 'voltage' | 0;
+			minute?: number;
+			percentage?: number;
+			type?: string;
+			voltage?: number;
+		} = {};
 
 		if ('System.Battery.Active.Type' in response) {
 			this.type = response['System.Battery.Active.Type'] as 'Battery' | 'DC';
@@ -59,6 +71,11 @@ export class MainBattery {
 		if ('System.Battery.Active.Remain.Voltage' in response) {
 			this.voltage = response['System.Battery.Active.Remain.Voltage'] as number;
 			repsonseValue.voltage = this.voltage;
+		}
+
+		if ('System.Battery.Active.Remain.Display' in response) {
+			this.display = response['System.Battery.Active.Remain.Display'] as 'minute' | 'percent' | 'voltage' | 0;
+			repsonseValue.display = this.display;
 		}
 
 		return repsonseValue;

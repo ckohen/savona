@@ -40,10 +40,6 @@ export class Audio {
 			this.channels.set(Number(channel.replace('ch.', '')) as 1 | 2 | 3 | 4, level as AudioLevel);
 		}
 
-		return response[Audio.PropertyName] as 'Automatic' | 'Manual';
-	}
-
-	public async setValue(value: 'Automatic' | 'Manual') {
-		await this.client.property.setValue({ params: [{ [Audio.PropertyName]: value }] });
+		return this.channels;
 	}
 }

@@ -131,14 +131,17 @@ export class Focus {
 
 		if ('Camera.Focus.Distance' in response) {
 			this.distanceStatus = response['Camera.Focus.Distance'] as 'Locked' | 'Unlocked';
+			responseValue.distance = this.distanceStatus;
 		}
 
 		if ('Camera.Focus.SettingMethod' in response) {
 			this.modeStatus = response['Camera.Focus.SettingMethod'] as 'Locked' | 'Unlocked';
+			responseValue.mode = this.modeStatus;
 		}
 
 		if ('Camera.Focus.Distance.Unit' in response) {
 			this.unitStatus = response['Camera.Focus.Distance.Unit'] as 'Locked' | 'Unlocked';
+			responseValue.unit = this.unitStatus;
 		}
 
 		return responseValue;

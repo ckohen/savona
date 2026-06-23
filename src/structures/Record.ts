@@ -49,7 +49,7 @@ export class Record {
 		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.TimeCode.Locked', (data) => {
 			this.timeCodeLocked = data as boolean;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.SimulRec.Enabled', (data) => {
+		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.SimulRec.Enabled', (data) => {
 			this.simulRecEnabled = data as boolean;
 		});
 		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.SimulRec.Mode', (data) => {

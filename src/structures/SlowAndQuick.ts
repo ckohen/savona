@@ -101,12 +101,27 @@ export class SlowAndQuick {
 
 	public async setValue(value: number) {
 		await this.client.property.setValue({
-			params: [{ 'Camera.SlowAndQuickMotion.Enabled': true, 'Camera.SlowAndQuickMotion.FrameRate': value }],
+			params: [
+				{
+					'Camera.SlowAndQuickMotion.Enabled': true,
+					'Camera.SlowAndQuickMotion.HighFrameRate.Enabled': false,
+					'Camera.SlowAndQuickMotion.FrameRate': value,
+				},
+			],
 		});
 	}
 
-	public async setDisabled() {
-		await this.client.property.setValue({ params: [{ 'Camera.SlowAndQuickMotion.Enabled': false }] });
+	public async setDisabled(framerate?: number) {
+		const params: Record<string, boolean | number> = {
+			'Camera.SlowAndQuickMotion.Enabled': false,
+			'Camera.SlowAndQuickMotion.HighFrameRate.Enabled': false,
+		};
+
+		if (framerate !== undefined) {
+			params['Camera.SlowAndQuickMotion.FrameRate'] = framerate;
+		}
+
+		await this.client.property.setValue({ params: [params] });
 	}
 
 	public async fetchStatus() {

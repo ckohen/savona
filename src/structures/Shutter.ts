@@ -144,19 +144,29 @@ export class Shutter {
 		return responseValue;
 	}
 
-	public async setValue(value: string, ecs = false) {
-		await this.client.property.setValue({
-			params: [
-				{
-					'Camera.Shutter.ECS.Enabled': ecs,
-					'Camera.Shutter.Value': value,
-				},
-			],
-		});
+	public async setValue(value: string, ecs = false, mode: 'Angle' | 'Speed' = this.mode) {
+		const params: Record<string, boolean | string> = {};
+
+		if (value === 'Off') {
+			params['Camera.Shutter.Enabled'] = false;
+		} else if (ecs) {
+			params['Camera.Shutter.ECS.Enabled'] = true;
+			params['Camera.Shutter.Mode'] = mode;
+		} else {
+			params['Camera.Shutter.ECS.Enabled'] = false;
+			params['Camera.Shutter.Mode'] = mode;
+			params['Camera.Shutter.Value'] = value;
+		}
+
+		await this.client.property.setValue({ params: [params] });
 	}
 
 	public async setDisabled() {
 		await this.client.property.setValue({ params: [{ 'Camera.Shutter.Enabled': false }] });
+	}
+
+	public async setECSValue(value: string) {
+		await this.client.property.setValue({ params: [{ 'Camera.Shutter.Mode': 'ECS', 'Camera.Shutter.Value': value }] });
 	}
 
 	public async setSliderValue(value: number) {

@@ -15,7 +15,7 @@ export type SystemConfigOption<ExtraOptions extends object = object> =
 	| (ExtraOptions & SystemConfigEnabled);
 
 export class SystemConfig {
-	public static readonly PropertyName = 'SystemConfig';
+	public static readonly PropertyName = 'System.Config';
 
 	public fileTransfer: SystemConfigOption<{ filetype: string[] }> = { enabled: false };
 
@@ -108,7 +108,7 @@ export class SystemConfig {
 	}
 
 	public async fetchValue() {
-		const response = await this.client.property.getValue({ params: [{ [SystemConfig.PropertyName]: null }] });
+		const response = await this.client.property.getValue({ params: [{ [SystemConfig.PropertyName]: ['*'] }] });
 		if (typeof response !== 'object' || response === null || !(SystemConfig.PropertyName in response)) {
 			throw new Error('Response does not match expected format');
 		}
@@ -144,8 +144,8 @@ export class SystemConfig {
 			this.liveLogging = returnValue.liveLogging;
 		}
 
-		if ('NTRMetaEdit' in responseValue) {
-			returnValue.NRTMetaEdit = responseValue.NTRMetaEdit as SystemConfigOption;
+		if ('NRTMetaEdit' in responseValue) {
+			returnValue.NRTMetaEdit = responseValue.NRTMetaEdit as SystemConfigOption;
 			this.NRTMetaEdit = returnValue.NRTMetaEdit;
 		}
 
