@@ -1,6 +1,7 @@
 import type { Buffer } from 'node:buffer';
 import { setInterval, setTimeout, clearInterval } from 'node:timers';
 import { URLSearchParams } from 'node:url';
+import type { URL } from 'node:url';
 import { AsyncEventEmitter } from '@vladfrangu/async_event_emitter';
 import { DigestClient } from 'digest-fetch';
 import { SavonaAlternate } from './clientMethods/alternate.js';
@@ -15,6 +16,7 @@ import { SavonaProperty } from './clientMethods/property.js';
 import { SavonaStorage } from './clientMethods/storage.js';
 import { SavonaSystem } from './clientMethods/system/index.js';
 import { LinearError } from './protocol/LinearErrors.js';
+import { fetchWithDigest } from './protocol/http.js';
 import { LinearClient, LinearEvent, WebsocketState, type LinearRequestParams } from './protocol/linear.js';
 import { AssignableButtons } from './structures/AssignableButtons.js';
 import { Audio } from './structures/Audio.js';
@@ -251,6 +253,10 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		return `http${this.useSSL ? 's' : ''}://${this.hostname}`;
 	}
 
+	public async fetch(url: URL | string, options?: RequestInit) {
+		return fetchWithDigest(url, this.username, this.password, options);
+	}
+
 	public async connect(timeout?: number) {
 		this.isManualDisconnect = false;
 		await this.linear.connect(timeout);
@@ -406,125 +412,3 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		}
 	}
 }
-
-// client.onnotify = function (event) {
-// 	let jsonstring;
-// 	let objArrItems;
-// 	if (typeof JSON !== 'undefined') {
-// 		jsonstring = JSON.stringify(event.data);
-// 	} else {
-// 		// sorry, IE does not have JSON.stringify
-// 		jsonstring = event.data;
-// 	}
-
-// 	if (event.name == 'Notify.Property.Value.Changed') {
-// 		objArrItems = JSON.parse(jsonstring)[0];
-// 		j.each(objArrItems, (key, value) => {
-// 			if (key == 'Security.Credential.LatestUpdated') {
-// 				disconnect(key);
-// 			}
-// 		});
-// 		NotifyMessagePopupProperties(objArrItems);
-// 		ShutterCtrl.NotifySetShutterData(objArrItems);
-
-// 		AssignCtrl.NotifySetAssignData(objArrItems);
-// 		ColorBarsCtrl.NotifySetColorBarsData(objArrItems);
-// 		SQFPSCtrl.NotifySetSQFPSData(objArrItems);
-// 		WhiteCtrl.NotifySetClrTempData(objArrItems);
-// 		GammaCtrl.NotifySetGammaData(objArrItems);
-// 		SetCardNotifyData(objArrItems); // Card Notify
-// 		MainBtteryNotifyData(objArrItems); // MainBattery Notify
-// 		SetAudioNotifyData(objArrItems); // Audio
-// 		SetClipNotifyData(objArrItems); // Clip number
-// 		AutoIrisCtrl.NotifySetAutoIrisData(objArrItems);
-// 		RecordCtrl.NotifySetRecorderData(objArrItems);
-// 		ATWCtrl.NotifySetATWData(objArrItems);
-// 		AWBCtrl.NotifySetAWBData(objArrItems);
-// 		ABBCtrl.NotifySetABBData(objArrItems);
-// 		LensMountCtrl.NotifySetLensMountData(objArrItems);
-// 		FocusCtrl.NotifySetFocusData(objArrItems);
-// 		ZoomCtrl.NotifySetZoomData(objArrItems);
-// 		IrisCtrl.NotifySetIrisData(objArrItems);
-// 		MainFileNotifyData(objArrItems); // Main File
-// 		GainCtrl.NotifySetGainData(objArrItems);
-// 		ClipNameCtrl.NotifySetClipNameData(objArrItems);
-// 		NDCtrl.NotifySetNDFilterData(objArrItems);
-// 		AGCCtrl.NotifySetAGCData(objArrItems);
-// 		AutoShutterCtrl.NotifySetAutoShutterData(objArrItems);
-// 		AutoNDCtrl.NotifySetANDData(objArrItems);
-// 		SystemConfigCtrl.NotifySystemConfigData(objArrItems);
-// 	} else if (event.name == 'Notify.Property.Status.Changed') {
-// 		objArrItems = JSON.parse(jsonstring)[0];
-
-// 		NDCtrl.NotifyNDFilterStatusData(objArrItems);
-// 		IrisCtrl.NotifyIrisStatusData(objArrItems);
-// 		FocusCtrl.NotifyFocusStatusData(objArrItems);
-// 		ZoomCtrl.NotifyZoomStatusData(objArrItems);
-// 		SQFPSCtrl.NotifySQFPSStatusData(objArrItems);
-// 		ShutterCtrl.NotifyShutterStatusData(objArrItems);
-// 		WhiteCtrl.NotifyWhiteStatusData(objArrItems);
-// 		GammaCtrl.NotifyGammaStatusData(objArrItems);
-// 		AutoIrisCtrl.NotifyAutoIrisStatusData(objArrItems);
-// 		AutoShutterCtrl.NotifyAutoShutterStatusData(objArrItems);
-// 		AGCCtrl.NotifyAGCStatusData(objArrItems);
-// 		AutoNDCtrl.NotifyAutoNDStatusData(objArrItems);
-// 		GainCtrl.NotifyGainStatusData(objArrItems);
-// 		ATWCtrl.NotifyATWStatusData(objArrItems);
-// 		ColorBarsCtrl.NotifyColorBarsStatusData(objArrItems);
-// 		AWBCtrl.NotifyAWBtatusData(objArrItems);
-// 	} else if (event.name == 'Notify.Process.ErrorOccurred') {
-// 		objArrItems = JSON.parse(jsonstring)[0];
-// 		if (objArrItems == 'Camera.WhiteBalance') {
-// 			g_objABStatusDlg.userData.SetTitle('Auto White');
-// 			g_objABStatusDlg.userData.SetText('Auto White Balance', 'NG');
-// 			g_objABStatusDlg.userData.ShowDialog();
-// 		}
-
-// 		if (objArrItems == 'Camera.BlackBalance') {
-// 			g_objABStatusDlg.userData.SetTitle('Auto Black');
-// 			g_objABStatusDlg.userData.SetText('Auto Black Balance', 'NG');
-// 			g_objABStatusDlg.userData.ShowDialog();
-// 		}
-// 	} else if (event.name == 'Notify.Process.Completed') {
-// 		objArrItems = JSON.parse(jsonstring)[0];
-// 		if (objArrItems == 'Camera.WhiteBalance') {
-// 			// g_objABStatusDlg.userData.clearMessage();
-// 			g_objABStatusDlg.userData.SetTitle('Auto White');
-// 			g_objABStatusDlg.userData.SetText('Auto White Balance', 'OK');
-// 			g_objABStatusDlg.userData.ShowDialog();
-// 		}
-
-// 		if (objArrItems == 'Camera.BlackBalance') {
-// 			g_objABStatusDlg.userData.SetTitle('Auto Black');
-// 			g_objABStatusDlg.userData.SetText('Auto Black Balance', 'OK');
-// 			g_objABStatusDlg.userData.ShowDialog();
-// 		}
-// 	} else if (event.name == 'Notify.Process.Started') {
-// 		closeAllShowingDialog();
-// 		objArrItems = JSON.parse(jsonstring)[0];
-// 		j.each(objArrItems, (key, value) => {
-// 			if (key == 'Camera.WhiteBalance') {
-// 				g_objABStatusDlg.userData.ShowDialog(false);
-// 			}
-
-// 			if (key == 'Camera.BlackBalance') {
-// 				g_objABStatusDlg.userData.ShowDialog(false);
-// 			}
-// 		});
-// 	} else if (event.name == 'Notify.Process.Aborted') {
-// 		objArrItems = JSON.parse(jsonstring)[0];
-// 		j.each(objArrItems, (key, value) => {
-// 			if (key == 'Camera.WhiteBalance') {
-// 				g_objABStatusDlg.userData.SetTitle('Auto White');
-// 				g_objABStatusDlg.userData.SetText('Auto White Balance', 'Cancelled');
-// 				g_objABStatusDlg.userData.ShowDialog();
-// 			}
-
-// 			if (key == 'Camera.BlackBalance') {
-// 				g_objABStatusDlg.userData.SetTitle('Auto Black');
-// 				g_objABStatusDlg.userData.SetText('Auto Black Balance', 'Cancelled');
-// 				g_objABStatusDlg.userData.ShowDialog();
-// 			}
-// 		});
-// 	}
-// };

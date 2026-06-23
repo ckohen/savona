@@ -141,7 +141,7 @@ export class MediaCards {
 		}
 
 		const profileUrl = new URL(profileUrls[0], this.client.httpBaseURL).toString();
-		const profileResponse = await fetch(profileUrl);
+		const profileResponse = await this.client.fetch(profileUrl);
 		if (!profileResponse.ok) {
 			throw new Error(`Unable to fetch media profile ${profileUrl}: ${profileResponse.status} ${profileResponse.statusText}`);
 		}
