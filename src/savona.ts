@@ -182,7 +182,7 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 
 	public gain = new Gain(this);
 
-	public gamme = new Gamma(this);
+	public gamma = new Gamma(this);
 
 	public globalStatus = new GlobalStatus(this);
 
