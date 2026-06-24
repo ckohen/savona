@@ -236,7 +236,6 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		this.notificationSubscribe = subscribeToNotifications;
 		this.linear = new LinearClient({ host: hostname, useSSL });
 
-		this.linear.on(LinearEvent.Connect, async () => this.onConnect());
 		this.linear.on(LinearEvent.Disconnect, (code, reason) => this.onDisconnect(code, reason));
 		this.linear.on(LinearEvent.Notify, (notification) => this.onNotify(notification));
 		this.linear.on(LinearEvent.Response, (response) => this.emit(SavonaEvent.Response, response));
@@ -260,6 +259,18 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	public async connect(timeout?: number) {
 		this.isManualDisconnect = false;
 		await this.linear.connect(timeout);
+		try {
+			await this.onConnect();
+		} catch (error) {
+			this.isManualDisconnect = true;
+			try {
+				await this.linear.disconnect();
+			} catch {
+				// The socket may already be closed by the time setup fails.
+			}
+
+			throw error;
+		}
 	}
 
 	public async disconnect(reconnect = false) {
@@ -303,23 +314,24 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 				this.password,
 			);
 			await requestDigest(this, digest);
+
+			if (this.notificationSubscribe) {
+				await this._subscribe();
+			}
 		} catch (error) {
 			this.emit(
 				SavonaEvent.Debug,
 				`Error encountered while connecting: ${error instanceof Error ? error.message : error}`,
 			);
+			throw error;
 		}
 
-		// subscribe to events, get current values / status
 		this.checkConnection();
-		if (this.notificationSubscribe) {
-			await this._subscribe();
-		}
-
 		this.emit(SavonaEvent.Connect);
 	}
 
 	private checkConnection() {
+		clearInterval(this.connectionCheckInterval);
 		this.connectionCheckInterval = setInterval(async () => {
 			try {
 				await this.property.getValue({ params: [{ 'System.Config': ['RemoteSetting'] }], timeout: 2_000 });
@@ -343,7 +355,17 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		this.connectionCheckInterval = undefined;
 		this.emit(SavonaEvent.Disconnect, code, reason);
 		if (this.isManualDisconnect) return;
-		setTimeout(async () => this.connect(), 1_000);
+		setTimeout(() => {
+			void this.reconnect();
+		}, 1_000);
+	}
+
+	private async reconnect() {
+		try {
+			await this.connect();
+		} catch (error) {
+			this.emit(SavonaEvent.Error, `Error reconnecting: ${error instanceof Error ? error.message : error}`);
+		}
 	}
 
 	private onNotify({ name, data }: { data: unknown; name: string }) {
