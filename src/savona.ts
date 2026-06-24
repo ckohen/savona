@@ -28,6 +28,7 @@ import { ColorBars } from './structures/ColorBars.js';
 import { DeviceInfo } from './structures/DeviceInfo.js';
 import { Focus } from './structures/Focus.js';
 import { Gain } from './structures/Gain.js';
+import { Gamma } from './structures/Gamma.js';
 import { GlobalStatus } from './structures/GlobalStatus.js';
 import { Iris } from './structures/Iris.js';
 import { LensMount } from './structures/LensMount.js';
@@ -180,6 +181,8 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	public focus = new Focus(this);
 
 	public gain = new Gain(this);
+
+	public gamme = new Gamma(this);
 
 	public globalStatus = new GlobalStatus(this);
 
