@@ -84,6 +84,8 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 
 	private _state = WebsocketState.Disconnected;
 
+	private _lastInboundActivityAt = 0;
+
 	private msgId = 0;
 
 	private socket?: WebSocket;
@@ -104,6 +106,13 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 		return this._state;
 	}
 
+	/**
+	 * @internal
+	 */
+	public get lastInboundActivityAt() {
+		return this._lastInboundActivityAt;
+	}
+
 	public async connect(timeout = 30_000) {
 		if (this._state === WebsocketState.Connecting || this._state === WebsocketState.Connected) {
 			return this.connectionPromise?.promise;
@@ -120,6 +129,7 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 
 		this.emit(LinearEvent.Debug, `Connecting to ${this.url}`);
 		this._state = WebsocketState.Connecting;
+		this._lastInboundActivityAt = 0;
 		try {
 			this.socket = new WebSocket(this.url);
 		} catch (error) {
@@ -261,9 +271,11 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 		for (const body of decoded)
 			switch (body[0]) {
 				case MessageType.Request:
+					this._lastInboundActivityAt = Date.now();
 					this.emit(LinearEvent.Request, { id: body[1], method: body[2], params: body[3] });
 					break;
 				case MessageType.Response: {
+					this._lastInboundActivityAt = Date.now();
 					const reqId = body[1];
 					const activeRequest = this.activeRequests.get(reqId);
 					if (activeRequest) {
@@ -282,6 +294,7 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 				}
 
 				case MessageType.Notify:
+					this._lastInboundActivityAt = Date.now();
 					this.emit(LinearEvent.Notify, { name: body[1], data: body[2] });
 					break;
 				default:

@@ -1,6 +1,6 @@
 {
 	"name": "@ckohen/savona",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"description": "Library for talking to PXW-Z190V cameras",
 	"type": "module",
 	"scripts": {

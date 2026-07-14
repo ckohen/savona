@@ -136,6 +136,7 @@ const MenuEventPropertyName = 'P.Menu.pmw-f5x.Event.EventID';
 const ConnectionCheckInterval = 5_000;
 const ConnectionCheckTimeout = 2_000;
 const ConnectionCheckFailureLimit = 3;
+const ConnectionActivityFreshness = 10_000;
 
 interface MenuEventRefreshHandler {
 	description: string;
@@ -439,6 +440,13 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 
 	private async runConnectionCheck() {
 		if (this.isConnectionCheckInFlight) return;
+
+		const connectionCheckStartedAt = Date.now();
+		if (connectionCheckStartedAt - this.linear.lastInboundActivityAt < ConnectionActivityFreshness) {
+			this.consecutiveConnectionCheckFailures = 0;
+			return;
+		}
+
 		this.isConnectionCheckInFlight = true;
 
 		try {
@@ -448,6 +456,11 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			});
 			this.consecutiveConnectionCheckFailures = 0;
 		} catch (error) {
+			if (this.linear.lastInboundActivityAt > connectionCheckStartedAt) {
+				this.consecutiveConnectionCheckFailures = 0;
+				return;
+			}
+
 			await this.handleConnectionCheckFailure(error);
 		} finally {
 			this.isConnectionCheckInFlight = false;
@@ -458,11 +471,14 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		if (this.isManualDisconnect) return;
 
 		this.consecutiveConnectionCheckFailures += 1;
-		this.emitError(
-			`Connection check failed (${this.consecutiveConnectionCheckFailures}/${ConnectionCheckFailureLimit}): ${formatError(error)}`,
-		);
+		const failureMessage = `Connection check failed (${this.consecutiveConnectionCheckFailures}/${ConnectionCheckFailureLimit}): ${formatError(error)}`;
 
-		if (this.consecutiveConnectionCheckFailures < ConnectionCheckFailureLimit) return;
+		if (this.consecutiveConnectionCheckFailures < ConnectionCheckFailureLimit) {
+			this.emit(SavonaEvent.Debug, failureMessage);
+			return;
+		}
+
+		this.emitError(failureMessage);
 
 		this.emitError(
 			`Disconnecting after ${this.consecutiveConnectionCheckFailures} consecutive connection check failures`,
