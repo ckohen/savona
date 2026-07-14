@@ -46,38 +46,35 @@ export class Iris {
 			this.mode = data as 'Automatic' | 'Manual';
 			await this.fetchStatus();
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_IRISAUTOMODE_NOTIFY_DISPLAY,
-					EVENT_ATTACHLENS_NOTIFY_LENSEXTENDER_UPDATE,
-					EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchAutomaticStatus();
-			}
-
-			if (
-				[
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_PLAY_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_IRISPOSITION_NOTIFY_DISPLAY,
-					EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
-					EVENT_IRISAUTOMODE_NOTIFY_DISPLAY,
-					EVENT_ATTACHLENS_NOTIFY_LENSEXTENDER_UPDATE,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_IRISAUTOMODE_NOTIFY_DISPLAY,
+				EVENT_ATTACHLENS_NOTIFY_LENSEXTENDER_UPDATE,
+				EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'Iris.fetchAutomaticStatus',
+			async () => this.fetchAutomaticStatus(),
+		);
+		client.registerMenuEventRefresh(
+			[
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_PLAY_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_IRISPOSITION_NOTIFY_DISPLAY,
+				EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
+				EVENT_IRISAUTOMODE_NOTIFY_DISPLAY,
+				EVENT_ATTACHLENS_NOTIFY_LENSEXTENDER_UPDATE,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'Iris.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 	}
 
 	public async fetchValue() {

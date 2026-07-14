@@ -22,28 +22,26 @@ export class AutoBlackBalance {
 	public status: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_TESTSAW_ON,
-					EVENT_COLORBAR_ON,
-					EVENT_AWB_MODE_DISPLAY,
-					EVENT_RPN_EXECUTEING,
-					EVENT_WHITESHADING_UPDATE,
-					EVENTKIND_BLACKSHADING_REFRESH,
-					EVENT_CCD_GAINOFFSET_UPDATE,
-					EVENT_CCD_DCOFFSET_UPDATE,
-					EVENTKIND_POOLFEED_REFRESH,
-					EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_TESTSAW_ON,
+				EVENT_COLORBAR_ON,
+				EVENT_AWB_MODE_DISPLAY,
+				EVENT_RPN_EXECUTEING,
+				EVENT_WHITESHADING_UPDATE,
+				EVENTKIND_BLACKSHADING_REFRESH,
+				EVENT_CCD_GAINOFFSET_UPDATE,
+				EVENT_CCD_DCOFFSET_UPDATE,
+				EVENTKIND_POOLFEED_REFRESH,
+				EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
+			],
+			'AutoBlackBalance.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 	}
 
 	public async execute() {

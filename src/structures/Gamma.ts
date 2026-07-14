@@ -47,22 +47,20 @@ export class Gamma {
 		client.notifications.propertyValueChanged.on('Paint.Gamma.Value', async (data) => {
 			this.value = data as GammaValue;
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_GAMMA_UPDATE,
-					EVENT_ABB_EXECUTE_FOR_GREY_OUT,
-					EVENT_AWB_MODE_DISPLAY,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_GAMMA_UPDATE,
+				EVENT_ABB_EXECUTE_FOR_GREY_OUT,
+				EVENT_AWB_MODE_DISPLAY,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'Gamma.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 		client.notifications.propertyValueChanged.on('Paint.Gamma.HDR.Value', async (data) => {
 			const hdrValue = data as { cam: string };
 			this.HDRValue = hdrValue.cam;

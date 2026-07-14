@@ -37,33 +37,24 @@ export class Gain {
 		client.notifications.propertyValueChanged.on(Gain.AutomaticPropertyName, async (data) => {
 			this.mode = data as 'Automatic' | 'Manual';
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_GAIN_AGC_MODE,
-				].includes(data as number)
-			) {
-				await this.fetchModeStatus();
-			}
-
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
-					EVENT_ABB_EXECUTE_FOR_GREY_OUT,
-					EVENT_AWB_MODE_DISPLAY,
-					EVENT_VIEW_UPDATE,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[EVENT_PLAY_UPDATE, EVENT_THUMBNAIL_UPDATE, EVENT_RECORDE_UPDATE, EVENT_VIEW_UPDATE, EVENT_GAIN_AGC_MODE],
+			'Gain.fetchModeStatus',
+			async () => this.fetchModeStatus(),
+		);
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
+				EVENT_ABB_EXECUTE_FOR_GREY_OUT,
+				EVENT_AWB_MODE_DISPLAY,
+				EVENT_VIEW_UPDATE,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'Gain.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 	}
 
 	public async fetchValue() {

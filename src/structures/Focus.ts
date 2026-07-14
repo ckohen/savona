@@ -34,22 +34,20 @@ export class Focus {
 		client.notifications.propertyValueChanged.on('Camera.Focus.Distance.Unit', async (data) => {
 			this.unit = data as 'Feet' | 'Meter';
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENTKIND_ADJUSTFOCUS_FOCUSMODE_UPDATE,
-					EVENT_700P_ZOOM_FOCUS_REMOTE_ON_FOR_WIFI,
-					EVENT_ATTACHLENS_NOTIFY_LENSEXTENDER_UPDATE,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENTKIND_ADJUSTFOCUS_FOCUSMODE_UPDATE,
+				EVENT_700P_ZOOM_FOCUS_REMOTE_ON_FOR_WIFI,
+				EVENT_ATTACHLENS_NOTIFY_LENSEXTENDER_UPDATE,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'Focus.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 		client.notifications.propertyStatusChanged.on('Camera.Focus.Distance', async (data) => {
 			this.distanceStatus = data as 'Locked' | 'Unlocked';
 		});

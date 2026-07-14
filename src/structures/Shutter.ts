@@ -55,24 +55,22 @@ export class Shutter {
 		client.notifications.propertyValueChanged.on('Camera.Shutter.Value', async (data) => {
 			this.value = data as string;
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					AUTOSHUTTER_GRAYOUT_SHUTTERSPEED,
-					SANDQ_GRAYOUT_SLOWSHUTTER,
-					RPN_GRAYOUT_SHUTTER,
-					ABB_GRAYOUT_SHUTTER,
-					EVENT_AWB_MODE_DISPLAY,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				AUTOSHUTTER_GRAYOUT_SHUTTERSPEED,
+				SANDQ_GRAYOUT_SLOWSHUTTER,
+				RPN_GRAYOUT_SHUTTER,
+				ABB_GRAYOUT_SHUTTER,
+				EVENT_AWB_MODE_DISPLAY,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'Shutter.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 		client.notifications.propertyStatusChanged.on('Camera.Shutter.Enabled', async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});

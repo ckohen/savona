@@ -58,37 +58,34 @@ export class WhiteBalance {
 		client.notifications.propertyValueChanged.on(WhiteBalance.TrackingPropertyName, async (data) => {
 			this.trackingMode = data as 'Automatic' | 'Manual';
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_ATW_HOLD_DISPLAY,
-					EVENT_ABB_EXECUTE_FOR_GREY_OUT,
-					EVENT_AWB_MODE_DISPLAY,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchTrackingModeStatus();
-			}
-
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
-					EVENT_AWB_MODE_DISPLAY,
-					EVENT_ABB_EXECUTE_FOR_GREY_OUT,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_ATW_HOLD_DISPLAY,
+				EVENT_ABB_EXECUTE_FOR_GREY_OUT,
+				EVENT_AWB_MODE_DISPLAY,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'WhiteBalance.fetchTrackingModeStatus',
+			async () => this.fetchTrackingModeStatus(),
+		);
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
+				EVENT_AWB_MODE_DISPLAY,
+				EVENT_ABB_EXECUTE_FOR_GREY_OUT,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'WhiteBalance.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 	}
 
 	public async fetchValue() {

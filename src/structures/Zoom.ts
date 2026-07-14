@@ -22,21 +22,19 @@ export class Zoom {
 		client.notifications.propertyValueChanged.on(Zoom.PropertyName, async (data) => {
 			this.value = data as number;
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_700P_ZOOM_FOCUS_REMOTE_ON_FOR_WIFI,
-					EVENT_ATTACHLENS_NOTIFY_LENSEXTENDER_UPDATE,
-					EVENTKIND_POOLFEED_REFRESH,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_700P_ZOOM_FOCUS_REMOTE_ON_FOR_WIFI,
+				EVENT_ATTACHLENS_NOTIFY_LENSEXTENDER_UPDATE,
+				EVENTKIND_POOLFEED_REFRESH,
+			],
+			'Zoom.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 		client.notifications.propertyStatusChanged.on(Zoom.PropertyName, async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});

@@ -32,23 +32,21 @@ export class SlowAndQuick {
 		client.notifications.propertyValueChanged.on('Camera.SlowAndQuickMotion.HighFrameRate.Enabled', async (data) => {
 			this.highFramerateEnabled = data as boolean;
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_RETURN_SANDQMOTION_ISAVAILABLE,
-					EVENT_RETURN_SANDQMOTION_UNAVAILABLE,
-					EVENT_NOTIFY_SANDQMOTION_ISAVAILABLE,
-					EVENT_NOTIFY_SANDQMOTION_UNAVAILABLE,
-					EVENT_AWB_MODE_DISPLAY,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_RETURN_SANDQMOTION_ISAVAILABLE,
+				EVENT_RETURN_SANDQMOTION_UNAVAILABLE,
+				EVENT_NOTIFY_SANDQMOTION_ISAVAILABLE,
+				EVENT_NOTIFY_SANDQMOTION_UNAVAILABLE,
+				EVENT_AWB_MODE_DISPLAY,
+			],
+			'SlowAndQuick.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 		client.notifications.propertyStatusChanged.on('Camera.SlowAndQuickMotion.Enabled', async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});

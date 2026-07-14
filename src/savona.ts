@@ -2,6 +2,7 @@ import type { Buffer } from 'node:buffer';
 import { setInterval, setTimeout, clearInterval } from 'node:timers';
 import { URLSearchParams } from 'node:url';
 import type { URL } from 'node:url';
+import { inspect } from 'node:util';
 import { AsyncEventEmitter } from '@vladfrangu/async_event_emitter';
 import { DigestClient } from 'digest-fetch';
 import { SavonaAlternate } from './clientMethods/alternate.js';
@@ -95,6 +96,12 @@ async function requestDigest(client: SavonaClient, digest: { cnonce: string; res
 	}
 }
 
+function formatError(error: unknown) {
+	if (error instanceof Error) return error.message;
+	if (typeof error === 'string') return error;
+	return inspect(error, { depth: 4 });
+}
+
 export interface SavonaRequestOptions<Params extends LinearRequestParams = LinearRequestParams> {
 	params?: Params;
 	timeout?: number;
@@ -125,6 +132,16 @@ export interface SavonaNotificationEvents {
 }
 
 const NotificationSubscriptions = ['Notify.Properties', 'Notify.Process', 'Notify.Property', 'Notify.Capability'];
+const MenuEventPropertyName = 'P.Menu.pmw-f5x.Event.EventID';
+const ConnectionCheckInterval = 5_000;
+const ConnectionCheckTimeout = 2_000;
+const ConnectionCheckFailureLimit = 3;
+
+interface MenuEventRefreshHandler {
+	description: string;
+	eventIds: ReadonlySet<number>;
+	refresh(eventId: number): Promise<unknown> | unknown;
+}
 
 export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	public version = '2.7.1';
@@ -161,6 +178,14 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		capabilityValueChanged: new AsyncEventEmitter<SavonaNotificationEvents>(),
 		process: new AsyncEventEmitter<SavonaNotificationEvents>(),
 	} as const;
+
+	private readonly menuEventRefreshHandlers: MenuEventRefreshHandler[] = [];
+
+	private menuEventRefreshTimer: NodeJS.Timeout | undefined;
+
+	private isRefreshingMenuEvents = false;
+
+	private readonly pendingMenuEventRefreshIds: Set<number> = new Set();
 
 	public assignableButtons = new AssignableButtons(this);
 
@@ -228,6 +253,10 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 
 	private connectionCheckInterval: NodeJS.Timeout | undefined;
 
+	private consecutiveConnectionCheckFailures = 0;
+
+	private isConnectionCheckInFlight = false;
+
 	public constructor(
 		public readonly hostname: string,
 		private readonly username: string,
@@ -239,12 +268,15 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		this.notificationSubscribe = subscribeToNotifications;
 		this.linear = new LinearClient({ host: hostname, useSSL });
 
+		this.setupNotificationErrorHandlers();
+		this.notifications.propertyValueChanged.on(MenuEventPropertyName, (data) => this.queueMenuEventRefresh(data));
+
 		this.linear.on(LinearEvent.Disconnect, (code, reason) => this.onDisconnect(code, reason));
 		this.linear.on(LinearEvent.Notify, (notification) => this.onNotify(notification));
 		this.linear.on(LinearEvent.Response, (response) => this.emit(SavonaEvent.Response, response));
 		this.linear.on(LinearEvent.Request, (request) => this.emit(SavonaEvent.Request, request));
 		this.linear.on(LinearEvent.Debug, (message) => this.emit(SavonaEvent.Debug, `[Linear Debug]: ${message}`));
-		this.linear.on(LinearEvent.Error, (error) => this.emit(SavonaEvent.Error, `[Linear Error]: ${error}`));
+		this.linear.on(LinearEvent.Error, (error) => this.emitError(`[Linear Error]: ${error}`));
 	}
 
 	public get state() {
@@ -283,6 +315,17 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 
 	public async request(method: string, { timeout, params = [] }: SavonaRequestOptions = {}) {
 		return this.linear.request({ method, timeout, params });
+	}
+
+	/**
+	 * @internal
+	 */
+	public registerMenuEventRefresh(
+		eventIds: readonly number[],
+		description: string,
+		refresh: (eventId: number) => Promise<unknown> | unknown,
+	) {
+		this.menuEventRefreshHandlers.push({ description, eventIds: new Set(eventIds), refresh });
 	}
 
 	public async subscribeToNotifications() {
@@ -333,24 +376,105 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		this.emit(SavonaEvent.Connect);
 	}
 
-	private checkConnection() {
-		clearInterval(this.connectionCheckInterval);
-		this.connectionCheckInterval = setInterval(async () => {
-			try {
-				await this.property.getValue({ params: [{ 'System.Config': ['RemoteSetting'] }], timeout: 2_000 });
-			} catch (error) {
-				if (!this.isManualDisconnect) {
-					this.emit(
-						SavonaEvent.Error,
-						`Error encountered during connection check: ${error instanceof Error ? error.message : error}`,
-					);
-					await this.disconnect();
-					clearInterval(this.connectionCheckInterval);
+	private setupNotificationErrorHandlers() {
+		for (const [name, emitter] of Object.entries(this.notifications)) {
+			emitter.on('error', (error) => {
+				this.emitError(`Notification listener error on ${name}: ${formatError(error)}`);
+			});
+		}
+	}
+
+	private queueMenuEventRefresh(data: unknown) {
+		const eventId = Number(data);
+		if (!Number.isFinite(eventId)) return;
+
+		this.pendingMenuEventRefreshIds.add(eventId);
+		if (this.isRefreshingMenuEvents || this.menuEventRefreshTimer !== undefined) return;
+
+		this.menuEventRefreshTimer = setTimeout(() => {
+			this.menuEventRefreshTimer = undefined;
+			void this.refreshMenuEventStatuses();
+		}, 0);
+	}
+
+	private async refreshMenuEventStatuses() {
+		if (this.isRefreshingMenuEvents) return;
+		this.isRefreshingMenuEvents = true;
+
+		try {
+			while (this.pendingMenuEventRefreshIds.size > 0) {
+				const eventIds = [...this.pendingMenuEventRefreshIds];
+				this.pendingMenuEventRefreshIds.clear();
+				const refreshHandlers = new Map<MenuEventRefreshHandler, number>();
+
+				for (const eventId of eventIds) {
+					for (const handler of this.menuEventRefreshHandlers) {
+						if (handler.eventIds.has(eventId) && !refreshHandlers.has(handler)) {
+							refreshHandlers.set(handler, eventId);
+						}
+					}
 				}
 
-				this.connectionCheckInterval = undefined;
+				for (const [handler, eventId] of refreshHandlers) {
+					try {
+						await handler.refresh(eventId);
+					} catch (error) {
+						this.emitError(`Menu event refresh failed for ${handler.description}: ${formatError(error)}`);
+					}
+				}
 			}
-		}, 5_000);
+		} finally {
+			this.isRefreshingMenuEvents = false;
+		}
+	}
+
+	private checkConnection() {
+		clearInterval(this.connectionCheckInterval);
+		this.consecutiveConnectionCheckFailures = 0;
+		this.isConnectionCheckInFlight = false;
+		this.connectionCheckInterval = setInterval(() => {
+			void this.runConnectionCheck();
+		}, ConnectionCheckInterval);
+	}
+
+	private async runConnectionCheck() {
+		if (this.isConnectionCheckInFlight) return;
+		this.isConnectionCheckInFlight = true;
+
+		try {
+			await this.property.getValue({
+				params: [{ 'System.Config': ['RemoteSetting'] }],
+				timeout: ConnectionCheckTimeout,
+			});
+			this.consecutiveConnectionCheckFailures = 0;
+		} catch (error) {
+			await this.handleConnectionCheckFailure(error);
+		} finally {
+			this.isConnectionCheckInFlight = false;
+		}
+	}
+
+	private async handleConnectionCheckFailure(error: unknown) {
+		if (this.isManualDisconnect) return;
+
+		this.consecutiveConnectionCheckFailures += 1;
+		this.emitError(
+			`Connection check failed (${this.consecutiveConnectionCheckFailures}/${ConnectionCheckFailureLimit}): ${formatError(error)}`,
+		);
+
+		if (this.consecutiveConnectionCheckFailures < ConnectionCheckFailureLimit) return;
+
+		this.emitError(
+			`Disconnecting after ${this.consecutiveConnectionCheckFailures} consecutive connection check failures`,
+		);
+		clearInterval(this.connectionCheckInterval);
+		this.connectionCheckInterval = undefined;
+
+		try {
+			await this.disconnect(true);
+		} catch (disconnectError) {
+			this.emitError(`Error disconnecting after failed connection checks: ${formatError(disconnectError)}`);
+		}
 	}
 
 	private onDisconnect(code: number, reason?: Buffer) {
@@ -367,12 +491,12 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		try {
 			await this.connect();
 		} catch (error) {
-			this.emit(SavonaEvent.Error, `Error reconnecting: ${error instanceof Error ? error.message : error}`);
+			this.emitError(`Error reconnecting: ${formatError(error)}`);
 		}
 	}
 
 	private onNotify({ name, data }: { data: unknown; name: string }) {
-		this.notifications.raw.emit(name, data);
+		this.emitNotification('raw', name, data);
 		if (!Array.isArray(data)) {
 			return;
 		}
@@ -383,7 +507,7 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			case 'Notify.Property.Value.Changed': {
 				if (typeof notificationData !== 'object' || notificationData === null) return;
 				for (const [key, value] of Object.entries(notificationData)) {
-					this.notifications.propertyValueChanged.emit(key, value);
+					this.emitNotification('propertyValueChanged', key, value);
 				}
 
 				break;
@@ -392,7 +516,7 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			case 'Notify.Property.Status.Changed': {
 				if (typeof notificationData !== 'object' || notificationData === null) return;
 				for (const [key, value] of Object.entries(notificationData)) {
-					this.notifications.propertyStatusChanged.emit(key, value);
+					this.emitNotification('propertyStatusChanged', key, value);
 				}
 
 				break;
@@ -401,7 +525,7 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			case 'Notify.Property.ErrorOccurred': {
 				if (typeof notificationData !== 'object' || notificationData === null) return;
 				for (const [key, value] of Object.entries(notificationData)) {
-					this.notifications.propertyErrorOccurred.emit(key, value);
+					this.emitNotification('propertyErrorOccurred', key, value);
 				}
 
 				break;
@@ -410,7 +534,7 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			case 'Notify.Capabilities.Changed': {
 				if (typeof notificationData !== 'object' || notificationData === null) return;
 				for (const [key, value] of Object.entries(notificationData)) {
-					this.notifications.capabilitiesChanged.emit(key, value);
+					this.emitNotification('capabilitiesChanged', key, value);
 				}
 
 				break;
@@ -419,7 +543,7 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			case 'Notify.Capability.Value.Changed': {
 				if (typeof notificationData !== 'object' || notificationData === null) return;
 				for (const [key, value] of Object.entries(notificationData)) {
-					this.notifications.capabilityValueChanged.emit(key, value);
+					this.emitNotification('capabilityValueChanged', key, value);
 				}
 
 				break;
@@ -431,9 +555,34 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			case 'Notify.Process.Aborted':
 			case 'Notify.Process.Updated': {
 				const eventName = name.split('.')[2] as string;
-				this.notifications.process.emit(eventName, notificationData);
+				this.emitNotification('process', eventName, notificationData);
 				break;
 			}
+		}
+	}
+
+	private emitNotification<EmitterName extends keyof SavonaClient['notifications']>(
+		emitterName: EmitterName,
+		eventName: string,
+		data: unknown,
+	) {
+		try {
+			this.notifications[emitterName].emit(eventName, data);
+		} catch (error) {
+			this.emitError(`Notification listener error on ${String(emitterName)}: ${formatError(error)}`);
+		}
+	}
+
+	private emitError(error: string) {
+		if (this.listenerCount(SavonaEvent.Error) === 0) {
+			console.error('Savona error:', error);
+			return;
+		}
+
+		try {
+			this.emit(SavonaEvent.Error, error);
+		} catch (listenerError) {
+			console.error('Savona error listener threw while handling:', error, listenerError);
 		}
 	}
 }

@@ -32,28 +32,26 @@ export class ColorBars {
 		client.notifications.propertyValueChanged.on('Camera.ColorBar.Type', async (data) => {
 			this.type = data as string;
 		});
-		client.notifications.propertyValueChanged.on('P.Menu.pmw-f5x.Event.EventID', async (data) => {
-			if (
-				[
-					EVENT_PLAY_UPDATE,
-					EVENT_THUMBNAIL_UPDATE,
-					EVENT_RECORDE_UPDATE,
-					EVENT_VIEW_UPDATE,
-					EVENT_RETURN_SANDQMOTION_ISAVAILABLE,
-					EVENT_RETURN_SANDQMOTION_UNAVAILABLE,
-					EVENT_NOTIFY_SANDQMOTION_UNAVAILABLE,
-					EVENT_NOTIFY_SANDQMOTION_ISAVAILABLE,
-					EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
-					EVENTKIND_POOLFEED_REFRESH,
-					EVENTKIND_BLACKSHADING_REFRESH,
-					EVENT_WHITESHADING_UPDATE,
-					EVENT_ABB_EXECUTE_FOR_GREY_OUT,
-					EVENT_AWB_MODE_DISPLAY,
-				].includes(data as number)
-			) {
-				await this.fetchStatus();
-			}
-		});
+		client.registerMenuEventRefresh(
+			[
+				EVENT_PLAY_UPDATE,
+				EVENT_THUMBNAIL_UPDATE,
+				EVENT_RECORDE_UPDATE,
+				EVENT_VIEW_UPDATE,
+				EVENT_RETURN_SANDQMOTION_ISAVAILABLE,
+				EVENT_RETURN_SANDQMOTION_UNAVAILABLE,
+				EVENT_NOTIFY_SANDQMOTION_UNAVAILABLE,
+				EVENT_NOTIFY_SANDQMOTION_ISAVAILABLE,
+				EVENT_700P_CONNECTION_STATUS_REFRESH_WIFI,
+				EVENTKIND_POOLFEED_REFRESH,
+				EVENTKIND_BLACKSHADING_REFRESH,
+				EVENT_WHITESHADING_UPDATE,
+				EVENT_ABB_EXECUTE_FOR_GREY_OUT,
+				EVENT_AWB_MODE_DISPLAY,
+			],
+			'ColorBars.fetchStatus',
+			async () => this.fetchStatus(),
+		);
 		client.notifications.propertyStatusChanged.on(ColorBars.PropertyName, async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});
