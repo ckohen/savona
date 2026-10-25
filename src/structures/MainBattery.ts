@@ -12,21 +12,41 @@ export class MainBattery {
 	public display: 'minute' | 'percent' | 'voltage' | 0 = 0;
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('System.Battery.Active.Type', (data) => {
+		client.registerCacheNotification('mainBattery', 'propertyValueChanged', 'System.Battery.Active.Type', (data) => {
 			this.type = data as 'Battery' | 'DC';
 		});
-		client.notifications.propertyValueChanged.on('System.Battery.Active.Remain.Percentage', (data) => {
-			this.percentage = data as number;
-		});
-		client.notifications.propertyValueChanged.on('System.Battery.Active.Remain.Minute', (data) => {
-			this.minute = data as number;
-		});
-		client.notifications.propertyValueChanged.on('System.Battery.Active.Remain.Voltage', (data) => {
-			this.voltage = data as number;
-		});
-		client.notifications.propertyValueChanged.on('System.Battery.Active.Remain.Display', (data) => {
-			this.display = data as 'minute' | 'percent' | 'voltage' | 0;
-		});
+		client.registerCacheNotification(
+			'mainBattery',
+			'propertyValueChanged',
+			'System.Battery.Active.Remain.Percentage',
+			(data) => {
+				this.percentage = data as number;
+			},
+		);
+		client.registerCacheNotification(
+			'mainBattery',
+			'propertyValueChanged',
+			'System.Battery.Active.Remain.Minute',
+			(data) => {
+				this.minute = data as number;
+			},
+		);
+		client.registerCacheNotification(
+			'mainBattery',
+			'propertyValueChanged',
+			'System.Battery.Active.Remain.Voltage',
+			(data) => {
+				this.voltage = data as number;
+			},
+		);
+		client.registerCacheNotification(
+			'mainBattery',
+			'propertyValueChanged',
+			'System.Battery.Active.Remain.Display',
+			(data) => {
+				this.display = data as 'minute' | 'percent' | 'voltage' | 0;
+			},
+		);
 	}
 
 	public async fetchValue() {

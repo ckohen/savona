@@ -13,11 +13,13 @@ yarn add @ckohen/savona
 ## Usage
 
 ```ts
-import { SavonaClient } from '@ckohen/savona';
+import { SavonaClient, SavonaEvent } from '@ckohen/savona';
 
 const client = new SavonaClient('camera.local', 'admin', 'password', {
 	subscribeToNotifications: true,
 });
+
+client.on(SavonaEvent.Error, (message) => console.error(message));
 
 await client.connect();
 
@@ -50,6 +52,32 @@ Most camera areas are available as properties on `SavonaClient`:
 - Low-level method groups: `property`, `capability`, `process`, `system`, `clip`, `storage`, `button`, `notify`, `network`
 
 Set methods send values to the camera and do not optimistically mutate local state. Fetch again, or listen for notifications, when you need confirmed camera state.
+
+## Cache Updates And Connections
+
+`SavonaEvent.CacheUpdate` identifies a structure whose automatic cache update has completed. Its argument is the typed `SavonaStructureName` union and matches the property on `client`. Read the existing structure to get the confirmed state:
+
+```ts
+import { SavonaEvent, type SavonaStructureName } from '@ckohen/savona';
+
+function onCacheUpdate(structure: SavonaStructureName) {
+	if (structure === 'uploadJobs') {
+		console.log([...client.uploadJobs.jobs.values()], client.uploadJobs.summary);
+	}
+}
+
+client.on(SavonaEvent.CacheUpdate, onCacheUpdate);
+
+// During consumer cleanup:
+client.off(SavonaEvent.CacheUpdate, onCacheUpdate);
+await client.disconnect();
+```
+
+These events follow property-notification handlers, completed menu-event refreshes, and upload-job fetches. Handlers that fetch additional state emit after that work completes. A burst can update several structures or the same structure more than once; events identify completed updates rather than providing a complete snapshot of the camera. Raw notifications describe incoming traffic and do not guarantee cache refresh completion. For explicit fetches on other structures, await the fetch result directly.
+
+`connect()` resolves after authentication and subscription setup succeed, and rejects on setup failure. Calling it while another connection attempt is in progress rejects. After an unexpected connection loss, the client retries automatically with delays increasing from 1 second to a maximum of 30 seconds. An explicit `disconnect()` cancels automatic retries and pending setup. Reconnect does not fetch every structure automatically; consumers should fetch the state they need after `SavonaEvent.Connect`.
+
+Recent valid inbound WebSocket activity suppresses redundant health polls. Genuine check failures 1 and 2 use `SavonaEvent.Debug`; failure 3 and disconnect use `SavonaEvent.Error`. Notification and background-refresh errors also use `SavonaEvent.Error`, with a console fallback when no error listener is registered.
 
 ## Media And Uploads
 
@@ -94,6 +122,7 @@ Main-file deletion from `media.1` or `media.2` is not exposed by the high-level 
 
 ```sh
 yarn install
+yarn test
 yarn lint
 yarn build
 ```

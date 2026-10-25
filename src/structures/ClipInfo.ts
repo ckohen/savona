@@ -11,16 +11,21 @@ export class ClipInfo {
 	public name = '';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.TotalClips', async (data) => {
+		client.registerCacheNotification('clipInfo', 'propertyValueChanged', 'P.Clip.Mediabox.TotalClips', async (data) => {
 			this.total = data as number;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.ClipPosition', async (data) => {
-			this.position = data as number;
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Status', async (data) => {
+		client.registerCacheNotification(
+			'clipInfo',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.ClipPosition',
+			async (data) => {
+				this.position = data as number;
+			},
+		);
+		client.registerCacheNotification('clipInfo', 'propertyValueChanged', 'P.Clip.Mediabox.Status', async (data) => {
 			this.status = data as RecordStatus;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.ClipName', async (data) => {
+		client.registerCacheNotification('clipInfo', 'propertyValueChanged', 'P.Clip.Mediabox.ClipName', async (data) => {
 			this.name = data as string;
 		});
 	}

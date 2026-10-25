@@ -19,10 +19,11 @@ export class Zoom {
 	public status: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(Zoom.PropertyName, async (data) => {
+		client.registerCacheNotification('zoom', 'propertyValueChanged', Zoom.PropertyName, async (data) => {
 			this.value = data as number;
 		});
 		client.registerMenuEventRefresh(
+			'zoom',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,
@@ -35,7 +36,7 @@ export class Zoom {
 			'Zoom.fetchStatus',
 			async () => this.fetchStatus(),
 		);
-		client.notifications.propertyStatusChanged.on(Zoom.PropertyName, async (data) => {
+		client.registerCacheNotification('zoom', 'propertyStatusChanged', Zoom.PropertyName, async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});
 	}

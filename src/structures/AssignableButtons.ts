@@ -26,20 +26,30 @@ export class AssignableButtons {
 	public buttons = new Map<number, AssignableButton>();
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(AssignableButtons.PropertyName, async (data) => {
-			this.setProperties(data as Record<string, [string, 'Off' | 'On']>);
-			await this.fetchStatus();
-		});
-		client.notifications.propertyValueChanged.on('P.Control.ProxyRec.StartStop', async () => {
-			await this.fetchStatus();
-		});
-		client.notifications.propertyValueChanged.on('ProxyRecStartStop', async () => {
+		client.registerCacheNotification(
+			'assignableButtons',
+			'propertyValueChanged',
+			AssignableButtons.PropertyName,
+			async (data) => {
+				this.setProperties(data as Record<string, [string, 'Off' | 'On']>);
+				await this.fetchStatus();
+			},
+		);
+		client.registerCacheNotification(
+			'assignableButtons',
+			'propertyValueChanged',
+			'P.Control.ProxyRec.StartStop',
+			async () => {
+				await this.fetchStatus();
+			},
+		);
+		client.registerCacheNotification('assignableButtons', 'propertyValueChanged', 'ProxyRecStartStop', async () => {
 			await this.fetchStatus();
 		});
 	}
 
 	public async press(buttonId: number) {
-		await this.client.button.sendKeys({ params: [[`Assignable.${buttonId + 1}`]] });
+		await this.client.button.sendKeys({ params: [[`Assignable.${buttonId}`]] });
 	}
 
 	public async fetchValues() {
@@ -70,18 +80,20 @@ export class AssignableButtons {
 	}
 
 	public async fetchStatus() {
-		const response = await this.client.property.getStatus({ params: [{ 'P.Control.ProxyRec.StartStop': null }] });
+		const response = await this.client.property.getStatus({
+			params: [{ 'P.Control.ProxyRec.StartStop': null }],
+		});
 		if (
 			typeof response !== 'object' ||
 			response === null ||
-			!('P.Control.ProxyRec.StartStop' in response) ||
-			!('ProxyRecStartStop' in response)
+			!('P.Control.ProxyRec.StartStop' in response)
 		) {
 			throw new Error('Response does not match expected format');
 		}
 
 		this.status =
-			response['P.Control.ProxyRec.StartStop'] === 'Locked' || response.ProxyRecStartStop === 'Locked'
+			response['P.Control.ProxyRec.StartStop'] === 'Locked' ||
+			('ProxyRecStartStop' in response && response.ProxyRecStartStop === 'Locked')
 				? 'Locked'
 				: 'Unlocked';
 		await this.fetchCapabilities();
@@ -109,9 +121,10 @@ export class AssignableButtons {
 			const existing = this.buttons.get(id);
 			if (existing) {
 				existing.capability = value[2];
+				existing.value = value[1];
+			} else {
+				this.buttons.set(id, new AssignableButton(this, id, value[2], value[1]));
 			}
-
-			this.buttons.set(id, new AssignableButton(this, id, value[2], value[1]));
 		}
 	}
 }

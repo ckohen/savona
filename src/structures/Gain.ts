@@ -25,24 +25,26 @@ export class Gain {
 	public modeStatus: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(Gain.PropertyName, async (data) => {
+		client.registerCacheNotification('gain', 'propertyValueChanged', Gain.PropertyName, async (data) => {
 			this.value = Number.parseInt(data as string, 10);
 		});
-		client.notifications.propertyStatusChanged.on(Gain.PropertyName, async (data) => {
+		client.registerCacheNotification('gain', 'propertyStatusChanged', Gain.PropertyName, async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyStatusChanged.on(Gain.AutomaticPropertyName, async (data) => {
+		client.registerCacheNotification('gain', 'propertyStatusChanged', Gain.AutomaticPropertyName, async (data) => {
 			this.modeStatus = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyValueChanged.on(Gain.AutomaticPropertyName, async (data) => {
+		client.registerCacheNotification('gain', 'propertyValueChanged', Gain.AutomaticPropertyName, async (data) => {
 			this.mode = data as 'Automatic' | 'Manual';
 		});
 		client.registerMenuEventRefresh(
+			'gain',
 			[EVENT_PLAY_UPDATE, EVENT_THUMBNAIL_UPDATE, EVENT_RECORDE_UPDATE, EVENT_VIEW_UPDATE, EVENT_GAIN_AGC_MODE],
 			'Gain.fetchModeStatus',
 			async () => this.fetchModeStatus(),
 		);
 		client.registerMenuEventRefresh(
+			'gain',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,

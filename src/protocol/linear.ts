@@ -1,4 +1,4 @@
-import type { Buffer } from 'node:buffer';
+import { Buffer } from 'node:buffer';
 import { setTimeout, clearTimeout } from 'node:timers';
 import * as msgpack from '@msgpack/msgpack';
 import { AsyncEventEmitter } from '@vladfrangu/async_event_emitter';
@@ -29,10 +29,7 @@ export const enum LinearEvent {
 }
 
 export type LinearRequestParams = (
-	| (Record<string, unknown> | string[] | string)[][]
-	| Record<string, unknown>
-	| string[]
-	| string
+	(Record<string, unknown> | string[] | string)[][] | Record<string, unknown> | string[] | string
 )[];
 
 export interface LinearEvents {
@@ -57,9 +54,21 @@ type LinearMessageNotify = [type: MessageType.Notify, name: string, data: unknow
 type LinearMessage = LinearMessageNotify | LinearMessageRequest | LinearMessageResponse;
 
 interface LinearRequest {
-	id: number;
+	reject(error: Error): void;
 	resolve(result: LinearRequestResponse): void;
 	timeout?: NodeJS.Timeout;
+}
+
+function isLinearMessage(value: unknown): value is LinearMessage {
+	if (!Array.isArray(value)) return false;
+	const [type, idOrName] = value;
+	if (type === MessageType.Notify) return value.length === 3 && typeof idOrName === 'string';
+	if (!Number.isInteger(idOrName) || idOrName < 0 || idOrName > 4_294_967_295) return false;
+	if (type === MessageType.Request) {
+		return value.length === 4 && typeof value[2] === 'string' && Array.isArray(value[3]);
+	}
+
+	return type === MessageType.Response && value.length === 4;
 }
 
 interface LinearRequestResponse {
@@ -92,7 +101,11 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 
 	private readonly url: string;
 
-	private connectionPromise?: { promise: Promise<void>; reject(): void; resolve(): void };
+	private connectionPromise?: { promise: Promise<void>; reject(error: Error): void; resolve(): void };
+
+	private connectionTimeout?: NodeJS.Timeout;
+
+	private disconnectionPromise?: Promise<void>;
 
 	private disconnectionPromiseResolve?(): void;
 
@@ -119,7 +132,7 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 		}
 
 		let res: (value: PromiseLike<void> | void) => void;
-		let rej: (reason?: any) => void;
+		let rej: (reason: Error) => void;
 		const promise = new Promise<void>((resolve, reject) => {
 			res = resolve;
 			rej = reject;
@@ -133,44 +146,56 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 		try {
 			this.socket = new WebSocket(this.url);
 		} catch (error) {
-			this._onclose(4_999);
-			throw error;
+			this._onclose(4_999, error instanceof Error ? error : new Error(String(error)));
+			return promise;
 		}
 
-		this.socket.on('open', () => this._onopen());
-		this.socket.on('close', (code, reason) => this._onclose(code, reason));
-		this.socket.on('error', (error) => this._onclose(4_999, error));
-		this.socket.on('message', (data, isBinary) => this._onmessage(data, isBinary));
+		const socket = this.socket;
+		socket.on('open', () => {
+			if (this.socket === socket) this._onopen();
+		});
+		socket.on('close', (code, reason) => {
+			if (this.socket === socket) this._onclose(code, reason);
+		});
+		socket.on('error', (error) => {
+			if (this.socket === socket) this._onclose(4_999, error);
+		});
+		socket.on('message', (data, isBinary) => {
+			if (this.socket === socket) this._onmessage(data, isBinary);
+		});
 
-		setTimeout(() => {
-			if (this._state === WebsocketState.Connecting) {
-				if (this.socket) {
-					this.socket.close();
-				}
-
-				this.socket = undefined;
-				this._onclose(4_999);
+		this.connectionTimeout = setTimeout(() => {
+			if (this.socket === socket && this._state === WebsocketState.Connecting) {
+				this._onclose(4_999, new Error('WebSocket connection timed out'));
+				socket.terminate();
 			}
 		}, timeout);
 
-		await this.connectionPromise?.promise;
+		await promise;
 	}
 
 	public async disconnect() {
 		if (this._state === WebsocketState.Disconnected) return;
+		if (this.disconnectionPromise) return this.disconnectionPromise;
 		this._state = WebsocketState.Disconnecting;
-		this.socket?.close();
-		await new Promise<void>((resolve) => {
+		this.disconnectionPromise = new Promise<void>((resolve) => {
 			this.disconnectionPromiseResolve = resolve;
 		});
+		const promise = this.disconnectionPromise;
+		if (this.socket) this.socket.close();
+		else this._onclose(1_000);
+		await promise;
 	}
 
 	private incrementId() {
-		while (this.activeRequests.has(this.msgId)) {
+		const firstId = this.msgId;
+		do {
+			const id = this.msgId;
 			this.msgId = this.msgId >= 4_294_967_295 ? 0 : this.msgId + 1;
-		}
+			if (!this.activeRequests.has(id)) return id;
+		} while (this.msgId !== firstId);
 
-		return this.msgId;
+		throw new Error('All Linear request IDs are in use');
 	}
 
 	public async request({
@@ -183,33 +208,32 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 		timeout?: number;
 	}) {
 		const id = this.incrementId();
-		let res: (data: LinearRequestResponse) => void;
-		let rej: (reason: Error) => void;
-		const resPromise = new Promise<LinearRequestResponse>((resolve, reject) => {
-			res = resolve;
-			rej = reject;
-		});
-		let timer;
-		if (timeout !== 0) {
-			timer = setTimeout(() => {
-				rej(new LinearTimedOutError());
-				this.activeRequests.delete(id);
-			}, timeout);
-		}
-
-		this.activeRequests.set(id, {
-			id,
-			resolve: res!,
-			timeout: timer,
+		const resolved = await new Promise<LinearRequestResponse>((resolve, reject) => {
+			const pending: LinearRequest = {
+				reject: (error) => {
+					if (this.finishRequest(id, pending)) reject(error);
+				},
+				resolve: (response) => {
+					if (this.finishRequest(id, pending)) resolve(response);
+				},
+			};
+			this.activeRequests.set(id, pending);
+			if (timeout !== 0) pending.timeout = setTimeout(() => pending.reject(new LinearTimedOutError()), timeout);
+			void this.send([MessageType.Request, id, method, params]).catch((error: Error) => pending.reject(error));
 		});
 
-		await this.send([MessageType.Request, id, method, params]);
-		const resolved = await resPromise;
 		if (resolved.error) {
 			throw new LinearError(resolved.error);
 		}
 
 		return resolved.result;
+	}
+
+	private finishRequest(id: number, pending: LinearRequest) {
+		if (this.activeRequests.get(id) !== pending) return false;
+		this.activeRequests.delete(id);
+		clearTimeout(pending.timeout);
+		return true;
 	}
 
 	public async response(data: { error?: unknown; id: number; result?: unknown }) {
@@ -229,76 +253,92 @@ export class LinearClient extends AsyncEventEmitter<LinearEvents> {
 			await this.connectionPromise?.promise;
 		}
 
-		this.socket?.send(msgpack.encode(data));
+		const socket = this.socket;
+		if (socket?.readyState !== WebSocket.OPEN) {
+			throw new Error('Attempted to send data before opening websocket');
+		}
+
+		await new Promise<void>((resolve, reject) => {
+			socket.send(msgpack.encode(data), (error) => {
+				if (error) reject(error);
+				else resolve();
+			});
+		});
 	}
 
 	private _onopen() {
+		if (this._state !== WebsocketState.Connecting) return;
+		clearTimeout(this.connectionTimeout);
+		this.connectionTimeout = undefined;
+		this._state = WebsocketState.Connected;
 		this.connectionPromise?.resolve();
 		this.connectionPromise = undefined;
-		if (this._state !== WebsocketState.Connecting) return;
 		this.emit(LinearEvent.Debug, `Websocket connection opened`);
-		this._state = WebsocketState.Connected;
 		this.emit(LinearEvent.Connect);
 	}
 
 	private _onclose(code: number, reason?: Buffer | Error) {
+		if (this._state === WebsocketState.Disconnected) return;
+		const socket = this.socket;
+		const error =
+			reason instanceof Error ? reason : new Error(`WebSocket closed (${code}): ${reason?.toString() ?? ''}`);
+		clearTimeout(this.connectionTimeout);
+		this.connectionTimeout = undefined;
+		this._state = WebsocketState.Disconnected;
+		this.socket = undefined;
+		this.connectionPromise?.reject(error);
+		this.connectionPromise = undefined;
+		for (const pending of this.activeRequests.values()) pending.reject(error);
+		this.disconnectionPromiseResolve?.();
+		this.disconnectionPromiseResolve = undefined;
+		this.disconnectionPromise = undefined;
 		if (code === 4_999) {
-			this.emit(LinearEvent.Error, `Error connecting webscoket, ${reason instanceof Error ? reason.message : reason}`);
+			if (socket && socket.readyState !== WebSocket.CLOSED) socket.terminate();
+			this.emit(LinearEvent.Error, `WebSocket error: ${error.message}`);
 		}
 
-		this.connectionPromise?.reject();
-		this.connectionPromise = undefined;
-		this.disconnectionPromiseResolve?.();
-		if (this._state !== WebsocketState.Disconnected) {
-			this._state = WebsocketState.Disconnected;
-			this.socket = undefined;
-			if (code === 4_999) return;
-			this.emit(LinearEvent.Disconnect, code, reason as Buffer);
-		}
+		this.emit(LinearEvent.Disconnect, code, reason instanceof Error ? undefined : reason);
 	}
 
 	private _onmessage(rawMessage: WebSocket.RawData, _isBinary: boolean) {
 		if (this._state !== WebsocketState.Connected) return;
 
-		let toDecode;
-		if (Array.isArray(rawMessage)) {
-			toDecode = rawMessage;
-		} else {
-			toDecode = [rawMessage];
+		let body: unknown;
+		try {
+			body = msgpack.decode(Array.isArray(rawMessage) ? Buffer.concat(rawMessage) : rawMessage);
+		} catch (error) {
+			this.emit(LinearEvent.Error, `Invalid WebSocket message: ${error instanceof Error ? error.message : error}`);
+			return;
 		}
 
-		const decoded = toDecode.map((elem) => msgpack.decode(elem) as LinearMessage);
-		for (const body of decoded)
-			switch (body[0]) {
-				case MessageType.Request:
-					this._lastInboundActivityAt = Date.now();
-					this.emit(LinearEvent.Request, { id: body[1], method: body[2], params: body[3] });
-					break;
-				case MessageType.Response: {
-					this._lastInboundActivityAt = Date.now();
-					const reqId = body[1];
-					const activeRequest = this.activeRequests.get(reqId);
-					if (activeRequest) {
-						clearTimeout(activeRequest.timeout);
-						activeRequest.resolve({
-							error: body[2],
-							result: body[3],
-						});
+		if (!isLinearMessage(body)) {
+			this.emit(LinearEvent.Error, 'Invalid Linear message received on WebSocket');
+			return;
+		}
 
-						this.activeRequests.delete(reqId);
-					} else {
-						this.emit(LinearEvent.Response, { id: reqId, error: body[2], result: body[3] });
-					}
-
-					break;
+		this._lastInboundActivityAt = Date.now();
+		switch (body[0]) {
+			case MessageType.Request:
+				this.emit(LinearEvent.Request, { id: body[1], method: body[2], params: body[3] });
+				break;
+			case MessageType.Response: {
+				const reqId = body[1];
+				const activeRequest = this.activeRequests.get(reqId);
+				if (activeRequest) {
+					activeRequest.resolve({
+						error: body[2],
+						result: body[3],
+					});
+				} else {
+					this.emit(LinearEvent.Response, { id: reqId, error: body[2], result: body[3] });
 				}
 
-				case MessageType.Notify:
-					this._lastInboundActivityAt = Date.now();
-					this.emit(LinearEvent.Notify, { name: body[1], data: body[2] });
-					break;
-				default:
-					console.warn('invalid data received on websocket', decoded);
+				break;
 			}
+
+			case MessageType.Notify:
+				this.emit(LinearEvent.Notify, { name: body[1], data: body[2] });
+				break;
+		}
 	}
 }

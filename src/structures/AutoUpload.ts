@@ -6,7 +6,7 @@ export class AutoUpload {
 	public enabled = false;
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(AutoUpload.PropertyName, (data) => {
+		client.registerCacheNotification('autoUpload', 'propertyValueChanged', AutoUpload.PropertyName, (data) => {
 			this.updateFromValue(data);
 		});
 	}

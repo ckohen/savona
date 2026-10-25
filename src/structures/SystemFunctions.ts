@@ -10,9 +10,14 @@ export class SystemFunctions {
 	public functions: Record<string, unknown> = {};
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(SystemFunctions.PropertyName, (data) => {
-			this.functions = asRecord(data);
-		});
+		client.registerCacheNotification(
+			'systemFunctions',
+			'propertyValueChanged',
+			SystemFunctions.PropertyName,
+			(data) => {
+				this.functions = asRecord(data);
+			},
+		);
 	}
 
 	public async fetchValue() {

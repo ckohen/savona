@@ -190,6 +190,38 @@ test('an idle client still performs a health check', async () => {
 	clearConnectionCheck(client);
 });
 
+test('recent inbound activity and successful health checks reset consecutive failures', async () => {
+	const client = createClient();
+	client.consecutiveConnectionCheckFailures = 2;
+	receiveLinearMessage(client, [0, 42, 'Camera.Test', []]);
+	await client.runConnectionCheck();
+	assert.equal(client.consecutiveConnectionCheckFailures, 0);
+	client.linear._lastInboundActivityAt = Date.now() - 20_000;
+	client.consecutiveConnectionCheckFailures = 2;
+	let checks = 0;
+	client.property.getValue = async () => {
+		checks += 1;
+		return {};
+	};
+	await client.runConnectionCheck();
+	assert.equal(checks, 1);
+	assert.equal(client.consecutiveConnectionCheckFailures, 0);
+});
+
+test('inbound activity in the same millisecond as poll start still suppresses a timeout', async (context) => {
+	context.mock.method(Date, 'now', () => 100_000);
+	const client = createClient();
+	const errors = [];
+	client.on(SavonaEvent.Error, (error) => errors.push(error));
+	client.property.getValue = async () => {
+		receiveLinearMessage(client, [2, 'Notify.Test', []]);
+		throw new Error('Timed Out');
+	};
+	await client.runConnectionCheck();
+	assert.equal(client.consecutiveConnectionCheckFailures, 0);
+	assert.deepEqual(errors, []);
+});
+
 test('connection checks do not overlap', async () => {
 	const client = createClient();
 	let calls = 0;

@@ -10,24 +10,7 @@ function headersFrom(headers: RequestInit['headers'] | undefined) {
 	const result: { [key: string]: string } = {};
 	if (headers === undefined) return result;
 
-	if (headers instanceof Headers) {
-		for (const [key, value] of headers) {
-			result[key] = value;
-		}
-
-		return result;
-	}
-
-	if (Array.isArray(headers)) {
-		for (const [key, value] of headers) {
-			result[key] = value;
-		}
-
-		return result;
-	}
-
-	for (const [key, value] of Object.entries(headers)) {
-		if (value === undefined) continue;
+	for (const [key, value] of new Headers(headers)) {
 		result[key] = value;
 	}
 
@@ -79,9 +62,11 @@ async function cameraFetch(url: URL | string, options: RequestInit = {}) {
 				headers,
 				insecureHTTPParser: true,
 				method: options.method ?? 'GET',
+				signal: options.signal ?? undefined,
 			},
 			(res) => {
 				const chunks: Buffer[] = [];
+				res.on('error', reject);
 				res.on('data', (chunk: Buffer | string) => {
 					chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
 				});
@@ -92,13 +77,18 @@ async function cameraFetch(url: URL | string, options: RequestInit = {}) {
 						return;
 					}
 
-					resolve(
-						new Response(Buffer.concat(chunks), {
-							headers: responseHeadersFrom(res.headers),
-							status,
-							statusText: res.statusMessage,
-						}),
-					);
+					try {
+						const emptyBody = options.method === 'HEAD' || [204, 205, 304].includes(status);
+						resolve(
+							new Response(emptyBody ? null : Buffer.concat(chunks), {
+								headers: responseHeadersFrom(res.headers),
+								status,
+								statusText: res.statusMessage,
+							}),
+						);
+					} catch (error) {
+						reject(error);
+					}
 				});
 			},
 		);

@@ -1,4 +1,5 @@
-import type { SavonaClient } from '../savona.js';
+import { setTimeout } from 'node:timers';
+import { SavonaEvent, type SavonaClient } from '../savona.js';
 import type { UploadSettingId } from './UploadSettings.js';
 
 export type UploadJobId = number;
@@ -128,13 +129,65 @@ export class UploadJobs {
 
 	private previousTransferredTime = 0;
 
+	private refreshQueued = false;
+
+	private notificationRefresh: Promise<void> | undefined;
+
+	private fetchPromise: Promise<{ jobs: Map<UploadJobId, UploadJob>; summary: UploadJobSummary }> | undefined;
+
 	public constructor(public client: SavonaClient) {
+		client.on(SavonaEvent.Disconnect, () => {
+			this.refreshQueued = false;
+		});
 		for (const property of JobProperties) {
-			client.notifications.propertyValueChanged.on(property, () => void this.fetchValue());
+			client.notifications.propertyValueChanged.on(property, async () => this.queueRefresh());
 		}
 	}
 
 	public async fetchValue() {
+		if (this.fetchPromise) return this.fetchPromise;
+		this.fetchPromise = this.fetchJobs();
+		try {
+			return await this.fetchPromise;
+		} finally {
+			this.fetchPromise = undefined;
+		}
+	}
+
+	private async queueRefresh() {
+		this.refreshQueued = true;
+		this.notificationRefresh ??= this.refreshFromNotifications();
+		return this.notificationRefresh;
+	}
+
+	private async refreshFromNotifications() {
+		try {
+			// Group all changed upload properties from the same notification before fetching.
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, 0);
+			});
+			if (this.fetchPromise) {
+				try {
+					await this.fetchPromise;
+				} catch {
+					// A caller owns this fetch; notifications still need their own refresh.
+				}
+			}
+
+			while (this.refreshQueued) {
+				this.refreshQueued = false;
+				try {
+					await this.fetchValue();
+				} catch (error) {
+					this.client.emitError(`UploadJobs refresh failed: ${error instanceof Error ? error.message : error}`);
+				}
+			}
+		} finally {
+			this.notificationRefresh = undefined;
+		}
+	}
+
+	private async fetchJobs() {
 		const response = await this.client.property.getValue({
 			params: [Object.fromEntries(JobProperties.map((property) => [property, ['*']]))],
 		});
@@ -143,8 +196,11 @@ export class UploadJobs {
 		}
 
 		const data = response as Record<string, unknown>;
-		this.jobs = new Map([...this.parseJobs(data, 'Progress'), ...this.parseJobs(data, 'History')].map((job) => [job.id, job]));
-		this.summary = this.parseSummary(data);
+		this.jobs = new Map(
+			[...this.parseJobs(data, 'History'), ...this.parseJobs(data, 'Progress')].map((job) => [job.id, job]),
+		);
+		this.summary = this.parseSummary();
+		this.client.emitCacheUpdate('uploadJobs');
 		return { jobs: this.jobs, summary: this.summary };
 	}
 
@@ -221,41 +277,41 @@ export class UploadJobs {
 		});
 	}
 
-	private parseSummary(data: Record<string, unknown>): UploadJobSummary {
+	private parseSummary(): UploadJobSummary {
 		let completedClips = 0;
 		let remainingClips = 0;
 		let totalBytes = 0;
 		let transferredBytes = 0;
-		let currentTransferredBytes = this.previousTransferredBytes;
-		let currentTransferredId = this.previousTransferredId;
+		let currentTransferredBytes = 0;
+		let currentTransferredId: UploadJobId | null = null;
 		let currentTotalBytes = 0;
 		let transferring = false;
 
-		for (const source of ['History', 'Progress'] as const) {
-			for (const job of this.parseJobs(data, source)) {
-				totalBytes += job.total;
-				transferredBytes += job.transferred;
-				if (job.status === 'Completed') {
-					completedClips++;
-				} else {
-					remainingClips++;
-				}
+		for (const job of this.jobs.values()) {
+			totalBytes += job.total;
+			transferredBytes += job.transferred;
+			if (job.status === 'Completed') {
+				completedClips++;
+			} else {
+				remainingClips++;
+			}
 
-				if (job.statusCode === 100) {
-					currentTransferredBytes = job.transferred;
-					currentTransferredId = job.id;
-					currentTotalBytes = job.total;
-					transferring = true;
-				}
+			if (job.statusCode === 100) {
+				currentTransferredBytes = job.transferred;
+				currentTransferredId = job.id;
+				currentTotalBytes = job.total;
+				transferring = true;
 			}
 		}
 
 		const now = Date.now();
 		const canMeasure =
+			transferring &&
 			this.previousTransferredId === currentTransferredId &&
 			this.previousTransferredBytes > 0 &&
 			currentTransferredBytes > this.previousTransferredBytes &&
-			this.previousTransferredTime > 0;
+			this.previousTransferredTime > 0 &&
+			now > this.previousTransferredTime;
 		const bitsPerSecond = canMeasure
 			? ((currentTransferredBytes - this.previousTransferredBytes) * 8) /
 				((now - this.previousTransferredTime) / 1_000)

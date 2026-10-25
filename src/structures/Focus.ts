@@ -24,17 +24,18 @@ export class Focus {
 	public modeStatus: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('Camera.Focus.Distance', async (data) => {
+		client.registerCacheNotification('focus', 'propertyValueChanged', 'Camera.Focus.Distance', async (data) => {
 			this.distance = data as number;
 			await this.fetchStatus();
 		});
-		client.notifications.propertyValueChanged.on('Camera.Focus.SettingMethod', async (data) => {
+		client.registerCacheNotification('focus', 'propertyValueChanged', 'Camera.Focus.SettingMethod', async (data) => {
 			this.mode = data as 'Automatic' | 'Manual';
 		});
-		client.notifications.propertyValueChanged.on('Camera.Focus.Distance.Unit', async (data) => {
+		client.registerCacheNotification('focus', 'propertyValueChanged', 'Camera.Focus.Distance.Unit', async (data) => {
 			this.unit = data as 'Feet' | 'Meter';
 		});
 		client.registerMenuEventRefresh(
+			'focus',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,
@@ -48,13 +49,13 @@ export class Focus {
 			'Focus.fetchStatus',
 			async () => this.fetchStatus(),
 		);
-		client.notifications.propertyStatusChanged.on('Camera.Focus.Distance', async (data) => {
+		client.registerCacheNotification('focus', 'propertyStatusChanged', 'Camera.Focus.Distance', async (data) => {
 			this.distanceStatus = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyStatusChanged.on('Camera.Focus.SettingMethod', async (data) => {
+		client.registerCacheNotification('focus', 'propertyStatusChanged', 'Camera.Focus.SettingMethod', async (data) => {
 			this.modeStatus = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyStatusChanged.on('Camera.Focus.Distance.Unit', async (data) => {
+		client.registerCacheNotification('focus', 'propertyStatusChanged', 'Camera.Focus.Distance.Unit', async (data) => {
 			this.unitStatus = data as 'Locked' | 'Unlocked';
 		});
 	}

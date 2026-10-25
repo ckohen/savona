@@ -23,7 +23,7 @@ export class Audio {
 	);
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(Audio.PropertyName, async (data) => {
+		client.registerCacheNotification('audio', 'propertyValueChanged', Audio.PropertyName, async (data) => {
 			for (const [channel, level] of Object.entries(data as Record<string, number>)) {
 				this.channels.set(Number(channel.replace('ch.', '')) as 1 | 2 | 3 | 4, level as AudioLevel);
 			}

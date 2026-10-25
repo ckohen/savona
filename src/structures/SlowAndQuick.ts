@@ -23,16 +23,32 @@ export class SlowAndQuick {
 	public status: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('Camera.SlowAndQuickMotion.Enabled', async (data) => {
-			this.enabled = data as boolean;
-		});
-		client.notifications.propertyValueChanged.on('Camera.SlowAndQuickMotion.FrameRate', async (data) => {
-			this.framerate = data as number;
-		});
-		client.notifications.propertyValueChanged.on('Camera.SlowAndQuickMotion.HighFrameRate.Enabled', async (data) => {
-			this.highFramerateEnabled = data as boolean;
-		});
+		client.registerCacheNotification(
+			'slowAndQuick',
+			'propertyValueChanged',
+			'Camera.SlowAndQuickMotion.Enabled',
+			async (data) => {
+				this.enabled = data as boolean;
+			},
+		);
+		client.registerCacheNotification(
+			'slowAndQuick',
+			'propertyValueChanged',
+			'Camera.SlowAndQuickMotion.FrameRate',
+			async (data) => {
+				this.framerate = data as number;
+			},
+		);
+		client.registerCacheNotification(
+			'slowAndQuick',
+			'propertyValueChanged',
+			'Camera.SlowAndQuickMotion.HighFrameRate.Enabled',
+			async (data) => {
+				this.highFramerateEnabled = data as boolean;
+			},
+		);
 		client.registerMenuEventRefresh(
+			'slowAndQuick',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,
@@ -47,9 +63,14 @@ export class SlowAndQuick {
 			'SlowAndQuick.fetchStatus',
 			async () => this.fetchStatus(),
 		);
-		client.notifications.propertyStatusChanged.on('Camera.SlowAndQuickMotion.Enabled', async (data) => {
-			this.status = data as 'Locked' | 'Unlocked';
-		});
+		client.registerCacheNotification(
+			'slowAndQuick',
+			'propertyStatusChanged',
+			'Camera.SlowAndQuickMotion.Enabled',
+			async (data) => {
+				this.status = data as 'Locked' | 'Unlocked';
+			},
+		);
 	}
 
 	public async fetchValue() {

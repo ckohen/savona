@@ -10,7 +10,7 @@ export class GlobalStatus {
 	public execute: boolean = true;
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(GlobalStatus.PropertyName, (data) => {
+		client.registerCacheNotification('globalStatus', 'propertyValueChanged', GlobalStatus.PropertyName, (data) => {
 			const values = data as { execute: boolean; read: boolean; write: boolean };
 
 			this.execute = values.execute;

@@ -17,23 +17,23 @@ export class ND {
 	public automaticStatus: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('Camera.NDFilter.Value', async (data) => {
+		client.registerCacheNotification('ND', 'propertyValueChanged', 'Camera.NDFilter.Value', async (data) => {
 			if (typeof data !== 'object' || data === null || !('cam' in data)) {
 				return;
 			}
 
 			this.value = data.cam as number;
 		});
-		client.notifications.propertyValueChanged.on('Camera.NDFilter.Enabled', async (data) => {
+		client.registerCacheNotification('ND', 'propertyValueChanged', 'Camera.NDFilter.Enabled', async (data) => {
 			this.enabled = data as boolean;
 		});
-		client.notifications.propertyStatusChanged.on('Camera.NDFilter.Value', async (data) => {
+		client.registerCacheNotification('ND', 'propertyStatusChanged', 'Camera.NDFilter.Value', async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyStatusChanged.on(ND.AutomaticPropertyName, async (data) => {
+		client.registerCacheNotification('ND', 'propertyStatusChanged', ND.AutomaticPropertyName, async (data) => {
 			this.automaticStatus = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyValueChanged.on(ND.AutomaticPropertyName, async (data) => {
+		client.registerCacheNotification('ND', 'propertyValueChanged', ND.AutomaticPropertyName, async (data) => {
 			if (typeof data !== 'object' || data === null || !('cam' in data)) {
 				return;
 			}

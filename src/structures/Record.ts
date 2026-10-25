@@ -31,28 +31,28 @@ export class Record {
 	public timeCodeLocked = false;
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Status', (data) => {
+		client.registerCacheNotification('record', 'propertyValueChanged', 'P.Clip.Mediabox.Status', (data) => {
 			this.status = data as RecordStatus;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Mode', (data) => {
+		client.registerCacheNotification('record', 'propertyValueChanged', 'P.Clip.Mediabox.Mode', (data) => {
 			this.mode = data as RecordMode;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Speed', (data) => {
+		client.registerCacheNotification('record', 'propertyValueChanged', 'P.Clip.Mediabox.Speed', (data) => {
 			this.speed = data as number;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.TimeCode.Type', (data) => {
+		client.registerCacheNotification('record', 'propertyValueChanged', 'P.Clip.Mediabox.TimeCode.Type', (data) => {
 			this.timeCodeType = data as 'Counter' | 'Duration' | 'TimeCode' | 'UB' | 'Unknown';
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.TimeCode.Value', (data) => {
+		client.registerCacheNotification('record', 'propertyValueChanged', 'P.Clip.Mediabox.TimeCode.Value', (data) => {
 			this.timeCodeValue = data as string;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.TimeCode.Locked', (data) => {
+		client.registerCacheNotification('record', 'propertyValueChanged', 'P.Clip.Mediabox.TimeCode.Locked', (data) => {
 			this.timeCodeLocked = data as boolean;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.SimulRec.Enabled', (data) => {
+		client.registerCacheNotification('record', 'propertyValueChanged', 'P.Clip.Mediabox.SimulRec.Enabled', (data) => {
 			this.simulRecEnabled = data as boolean;
 		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.SimulRec.Mode', (data) => {
+		client.registerCacheNotification('record', 'propertyValueChanged', 'P.Clip.Mediabox.SimulRec.Mode', (data) => {
 			this.simulRecMode = data as 'NONE' | 'SLOT_A' | 'SLOT_AB' | 'SLOT_B';
 		});
 	}

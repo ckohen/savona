@@ -29,24 +29,25 @@ export class Iris {
 	public automaticStatus: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(Iris.PropertyName, async (data) => {
+		client.registerCacheNotification('iris', 'propertyValueChanged', Iris.PropertyName, async (data) => {
 			this.value = data as number;
 		});
-		client.notifications.propertyValueChanged.on('Camera.Iris.Close.Enabled', async (data) => {
+		client.registerCacheNotification('iris', 'propertyValueChanged', 'Camera.Iris.Close.Enabled', async (data) => {
 			this.closed = data as boolean;
 		});
-		client.notifications.propertyStatusChanged.on(Iris.AutomaticPropertyName, async (data) => {
+		client.registerCacheNotification('iris', 'propertyStatusChanged', Iris.AutomaticPropertyName, async (data) => {
 			this.automaticStatus = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyStatusChanged.on('Camera.Iris.Mode', async () => {
+		client.registerCacheNotification('iris', 'propertyStatusChanged', 'Camera.Iris.Mode', async () => {
 			await this.fetchAutomaticStatus();
 			await this.fetchStatus();
 		});
-		client.notifications.propertyValueChanged.on(Iris.AutomaticPropertyName, async (data) => {
+		client.registerCacheNotification('iris', 'propertyValueChanged', Iris.AutomaticPropertyName, async (data) => {
 			this.mode = data as 'Automatic' | 'Manual';
 			await this.fetchStatus();
 		});
 		client.registerMenuEventRefresh(
+			'iris',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,
@@ -61,6 +62,7 @@ export class Iris {
 			async () => this.fetchAutomaticStatus(),
 		);
 		client.registerMenuEventRefresh(
+			'iris',
 			[
 				EVENT_THUMBNAIL_UPDATE,
 				EVENT_PLAY_UPDATE,

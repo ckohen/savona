@@ -37,28 +37,64 @@ export class WhiteBalance {
 	public trackingStatus: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(WhiteBalance.MemoryPropertyName, async (data) => {
-			this.memoryValue = data as { [key in WhiteBalanceMode]?: string };
-		});
-		client.notifications.propertyValueChanged.on(WhiteBalance.ModePropertyName, async (data) => {
-			this.mode = data as WhiteBalanceMode;
-		});
-		client.notifications.propertyStatusChanged.on(WhiteBalance.PropertyName, async (data) => {
-			this.status = data as 'Locked' | 'Unlocked';
-		});
-		client.notifications.propertyStatusChanged.on(WhiteBalance.AutomaticPropertyName, async () => {
-			await this.fetchAutomaticEnabled();
-		});
-		client.notifications.propertyValueChanged.on(WhiteBalance.AutomaticPropertyName, async () => {
-			await this.fetchAutomaticEnabled();
-		});
-		client.notifications.propertyStatusChanged.on(WhiteBalance.TrackingPropertyName, async (data) => {
-			this.trackingStatus = data as 'Locked' | 'Unlocked';
-		});
-		client.notifications.propertyValueChanged.on(WhiteBalance.TrackingPropertyName, async (data) => {
-			this.trackingMode = data as 'Automatic' | 'Manual';
-		});
+		client.registerCacheNotification(
+			'whiteBalance',
+			'propertyValueChanged',
+			WhiteBalance.MemoryPropertyName,
+			async (data) => {
+				this.memoryValue = data as { [key in WhiteBalanceMode]?: string };
+			},
+		);
+		client.registerCacheNotification(
+			'whiteBalance',
+			'propertyValueChanged',
+			WhiteBalance.ModePropertyName,
+			async (data) => {
+				this.mode = data as WhiteBalanceMode;
+			},
+		);
+		client.registerCacheNotification(
+			'whiteBalance',
+			'propertyStatusChanged',
+			WhiteBalance.PropertyName,
+			async (data) => {
+				this.status = data as 'Locked' | 'Unlocked';
+			},
+		);
+		client.registerCacheNotification(
+			'whiteBalance',
+			'propertyStatusChanged',
+			WhiteBalance.AutomaticPropertyName,
+			async () => {
+				await this.fetchAutomaticEnabled();
+			},
+		);
+		client.registerCacheNotification(
+			'whiteBalance',
+			'propertyValueChanged',
+			WhiteBalance.AutomaticPropertyName,
+			async () => {
+				await this.fetchAutomaticEnabled();
+			},
+		);
+		client.registerCacheNotification(
+			'whiteBalance',
+			'propertyStatusChanged',
+			WhiteBalance.TrackingPropertyName,
+			async (data) => {
+				this.trackingStatus = data as 'Locked' | 'Unlocked';
+			},
+		);
+		client.registerCacheNotification(
+			'whiteBalance',
+			'propertyValueChanged',
+			WhiteBalance.TrackingPropertyName,
+			async (data) => {
+				this.trackingMode = data as 'Automatic' | 'Manual';
+			},
+		);
 		client.registerMenuEventRefresh(
+			'whiteBalance',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,
@@ -73,6 +109,7 @@ export class WhiteBalance {
 			async () => this.fetchTrackingModeStatus(),
 		);
 		client.registerMenuEventRefresh(
+			'whiteBalance',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,

@@ -109,20 +109,30 @@ export class UploadSettings {
 
 	public constructor(public client: SavonaClient) {
 		for (const property of UploadSettingProperties) {
-			client.notifications.propertyValueChanged.on(property, (data) => {
+			client.registerCacheNotification('uploadSettings', 'propertyValueChanged', property, (data) => {
 				this.updateFromResponse({ [property]: data });
 			});
 		}
 
-		client.notifications.propertyStatusChanged.on('Network.Service.Upload.Credential', (data) => {
-			this.credentialStatus = data as 'Locked' | 'Unlocked';
-		});
-		client.notifications.propertyValueChanged.on(UploadSettings.PublicKeyStatusPropertyName, (data) => {
-			const status = asRecord(data).credential;
-			if (typeof status === 'string') {
-				this.publicKeyStatus = status;
-			}
-		});
+		client.registerCacheNotification(
+			'uploadSettings',
+			'propertyStatusChanged',
+			'Network.Service.Upload.Credential',
+			(data) => {
+				this.credentialStatus = data as 'Locked' | 'Unlocked';
+			},
+		);
+		client.registerCacheNotification(
+			'uploadSettings',
+			'propertyValueChanged',
+			UploadSettings.PublicKeyStatusPropertyName,
+			(data) => {
+				const status = asRecord(data).credential;
+				if (typeof status === 'string') {
+					this.publicKeyStatus = status;
+				}
+			},
+		);
 	}
 
 	public async fetchValue() {

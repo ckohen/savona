@@ -42,19 +42,29 @@ export class DeviceInfo {
 	public serialNumber = '';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(DeviceInfo.DateTimePropertyName, (data) => {
+		client.registerCacheNotification('deviceInfo', 'propertyValueChanged', DeviceInfo.DateTimePropertyName, (data) => {
 			if (typeof data === 'string') this.dateTime = data;
 		});
-		client.notifications.propertyValueChanged.on(DeviceInfo.ExtUsbEthernetStatusPropertyName, (data) => {
-			this.extUsbEthernetStatus = asRecord(data).extusbether;
-		});
-		client.notifications.propertyValueChanged.on(DeviceInfo.ModelNamePropertyName, (data) => {
+		client.registerCacheNotification(
+			'deviceInfo',
+			'propertyValueChanged',
+			DeviceInfo.ExtUsbEthernetStatusPropertyName,
+			(data) => {
+				this.extUsbEthernetStatus = asRecord(data).extusbether;
+			},
+		);
+		client.registerCacheNotification('deviceInfo', 'propertyValueChanged', DeviceInfo.ModelNamePropertyName, (data) => {
 			if (typeof data === 'string') this.modelName = data;
 		});
-		client.notifications.propertyValueChanged.on(DeviceInfo.SerialNumberPropertyName, (data) => {
-			if (typeof data === 'string') this.serialNumber = data;
-		});
-		client.notifications.propertyValueChanged.on(DeviceInfo.UsbNamePropertyName, (data) => {
+		client.registerCacheNotification(
+			'deviceInfo',
+			'propertyValueChanged',
+			DeviceInfo.SerialNumberPropertyName,
+			(data) => {
+				if (typeof data === 'string') this.serialNumber = data;
+			},
+		);
+		client.registerCacheNotification('deviceInfo', 'propertyValueChanged', DeviceInfo.UsbNamePropertyName, (data) => {
 			const deviceName = asRecord(data).usbether;
 			if (typeof deviceName === 'string') this.deviceName = deviceName;
 		});

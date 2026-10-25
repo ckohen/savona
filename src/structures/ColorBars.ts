@@ -26,13 +26,14 @@ export class ColorBars {
 	public status: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(ColorBars.PropertyName, async (data) => {
+		client.registerCacheNotification('colorBars', 'propertyValueChanged', ColorBars.PropertyName, async (data) => {
 			this.enabled = data as boolean;
 		});
-		client.notifications.propertyValueChanged.on('Camera.ColorBar.Type', async (data) => {
+		client.registerCacheNotification('colorBars', 'propertyValueChanged', 'Camera.ColorBar.Type', async (data) => {
 			this.type = data as string;
 		});
 		client.registerMenuEventRefresh(
+			'colorBars',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,
@@ -52,7 +53,7 @@ export class ColorBars {
 			'ColorBars.fetchStatus',
 			async () => this.fetchStatus(),
 		);
-		client.notifications.propertyStatusChanged.on(ColorBars.PropertyName, async (data) => {
+		client.registerCacheNotification('colorBars', 'propertyStatusChanged', ColorBars.PropertyName, async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});
 	}

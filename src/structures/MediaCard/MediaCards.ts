@@ -45,43 +45,59 @@ export class MediaCards {
 	public sdFileUpload: boolean = false;
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(MediaCards.PropertyName, (data) => this.updateStorage(data));
-		client.notifications.propertyValueChanged.on(MediaCards.ProtectedPropertyName, (data) =>
+		client.registerCacheNotification('mediaCards', 'propertyValueChanged', MediaCards.PropertyName, (data) =>
+			this.updateStorage(data),
+		);
+		client.registerCacheNotification('mediaCards', 'propertyValueChanged', MediaCards.ProtectedPropertyName, (data) =>
 			this.updateCards(data, (card, value) => {
 				card.writeProtected = value as boolean;
 			}),
 		);
-		client.notifications.propertyValueChanged.on(MediaCards.DriveStatusPropertyName, (data) =>
+		client.registerCacheNotification('mediaCards', 'propertyValueChanged', MediaCards.DriveStatusPropertyName, (data) =>
 			this.updateCards(data, (card, value) => {
 				card.status = value as string;
 			}),
 		);
-		client.notifications.propertyValueChanged.on(MediaCards.DriveTypePropertyName, (data) =>
+		client.registerCacheNotification('mediaCards', 'propertyValueChanged', MediaCards.DriveTypePropertyName, (data) =>
 			this.updateCards(data, (card, value) => {
 				card.type = value as 'CFast' | 'SD' | 'Unknown' | 'XQD';
 			}),
 		);
-		client.notifications.propertyValueChanged.on(MediaCards.MediaStatusPropertyName, (data) =>
+		client.registerCacheNotification('mediaCards', 'propertyValueChanged', MediaCards.MediaStatusPropertyName, (data) =>
 			this.updateCards(data, (card, value) => {
 				card.fileStatus = value as 'ManagementAreaDamaged' | 'Normal';
 			}),
 		);
-		client.notifications.propertyValueChanged.on(MediaCards.AvailableTimePropertyName, (data) =>
-			this.updateCards(data, (card, value) => {
-				card.availableTime = value as number;
-			}),
+		client.registerCacheNotification(
+			'mediaCards',
+			'propertyValueChanged',
+			MediaCards.AvailableTimePropertyName,
+			(data) =>
+				this.updateCards(data, (card, value) => {
+					card.availableTime = value as number;
+				}),
 		);
-		client.notifications.propertyValueChanged.on(MediaCards.AvailableSizePropertyName, (data) =>
-			this.updateCards(data, (card, value) => {
-				card.availableSize = value as number;
-			}),
+		client.registerCacheNotification(
+			'mediaCards',
+			'propertyValueChanged',
+			MediaCards.AvailableSizePropertyName,
+			(data) =>
+				this.updateCards(data, (card, value) => {
+					card.availableSize = value as number;
+				}),
 		);
-		client.notifications.propertyValueChanged.on(MediaCards.MediaProfileUrlPropertyName, (data) =>
-			this.updateCards(data, (card, value) => {
-				card.mediaProfileUrls = Array.isArray(value) ? (value as string[]) : [];
-			}),
+		client.registerCacheNotification(
+			'mediaCards',
+			'propertyValueChanged',
+			MediaCards.MediaProfileUrlPropertyName,
+			(data) =>
+				this.updateCards(data, (card, value) => {
+					card.mediaProfileUrls = Array.isArray(value) ? (value as string[]) : [];
+				}),
 		);
-		client.notifications.propertyValueChanged.on(MediaCards.FunctionPropertyName, (data) => this.updateFunctions(data));
+		client.registerCacheNotification('mediaCards', 'propertyValueChanged', MediaCards.FunctionPropertyName, (data) =>
+			this.updateFunctions(data),
+		);
 	}
 
 	public get cards() {

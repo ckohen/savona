@@ -35,19 +35,20 @@ export class Gamma {
 	public status: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyStatusChanged.on('Paint.Gamma.Enabled', async (data) => {
+		client.registerCacheNotification('gamma', 'propertyStatusChanged', 'Paint.Gamma.Enabled', async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyValueChanged.on('Paint.Gamma.Enabled', async (data) => {
+		client.registerCacheNotification('gamma', 'propertyValueChanged', 'Paint.Gamma.Enabled', async (data) => {
 			this.enabled = data as boolean;
 		});
-		client.notifications.propertyValueChanged.on('Paint.Gamma.Type', async (data) => {
+		client.registerCacheNotification('gamma', 'propertyValueChanged', 'Paint.Gamma.Type', async (data) => {
 			this.type = data as 'HyperGamma' | 'STD';
 		});
-		client.notifications.propertyValueChanged.on('Paint.Gamma.Value', async (data) => {
+		client.registerCacheNotification('gamma', 'propertyValueChanged', 'Paint.Gamma.Value', async (data) => {
 			this.value = data as GammaValue;
 		});
 		client.registerMenuEventRefresh(
+			'gamma',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,
@@ -61,14 +62,14 @@ export class Gamma {
 			'Gamma.fetchStatus',
 			async () => this.fetchStatus(),
 		);
-		client.notifications.propertyValueChanged.on('Paint.Gamma.HDR.Value', async (data) => {
+		client.registerCacheNotification('gamma', 'propertyValueChanged', 'Paint.Gamma.HDR.Value', async (data) => {
 			const hdrValue = data as { cam: string };
 			this.HDRValue = hdrValue.cam;
 		});
-		client.notifications.propertyValueChanged.on('Camera.ShootingMode', async () => {
+		client.registerCacheNotification('gamma', 'propertyValueChanged', 'Camera.ShootingMode', async () => {
 			await this.fetchValue();
 		});
-		client.notifications.propertyValueChanged.on('Camera.ShootingMode.QFHD.RecOut', async () => {
+		client.registerCacheNotification('gamma', 'propertyValueChanged', 'Camera.ShootingMode.QFHD.RecOut', async () => {
 			await this.fetchValue();
 		});
 	}

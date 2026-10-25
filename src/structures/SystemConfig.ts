@@ -11,8 +11,7 @@ export interface SystemConfigDisabled {
 }
 
 export type SystemConfigOption<ExtraOptions extends object = object> =
-	| SystemConfigDisabled
-	| (ExtraOptions & SystemConfigEnabled);
+	SystemConfigDisabled | (ExtraOptions & SystemConfigEnabled);
 
 export class SystemConfig {
 	public static readonly PropertyName = 'System.Config';
@@ -42,7 +41,7 @@ export class SystemConfig {
 	public storyBoard: SystemConfigOption<{ path: { read: string; write: string } }> = { enabled: false };
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(SystemConfig.PropertyName, (data) => {
+		client.registerCacheNotification('systemConfig', 'propertyValueChanged', SystemConfig.PropertyName, (data) => {
 			const values = data as {
 				FileTransfer?: SystemConfigOption<{ filetype: string[] }>;
 				LiveLogging?: SystemConfigOption;

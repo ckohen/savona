@@ -23,6 +23,7 @@ export class AutoBlackBalance {
 
 	public constructor(public client: SavonaClient) {
 		client.registerMenuEventRefresh(
+			'autoBlackBalance',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,

@@ -1,10 +1,13 @@
 import type { Buffer } from 'node:buffer';
-import { setInterval, setTimeout, clearInterval } from 'node:timers';
+import { setInterval, setTimeout, clearInterval, clearTimeout } from 'node:timers';
 import { URLSearchParams } from 'node:url';
 import type { URL } from 'node:url';
 import { inspect } from 'node:util';
-import { AsyncEventEmitter } from '@vladfrangu/async_event_emitter';
-import { DigestClient } from 'digest-fetch';
+import {
+	AsyncEventEmitter,
+	type AsyncEventEmitterPredefinedEvents,
+	type GetAsyncEventEmitterEventParameters,
+} from '@vladfrangu/async_event_emitter';
 import { SavonaAlternate } from './clientMethods/alternate.js';
 import { SavonaButton } from './clientMethods/button.js';
 import { SavonaCapability } from './clientMethods/capability.js';
@@ -16,7 +19,6 @@ import { SavonaProcess } from './clientMethods/process/index.js';
 import { SavonaProperty } from './clientMethods/property.js';
 import { SavonaStorage } from './clientMethods/storage.js';
 import { SavonaSystem } from './clientMethods/system/index.js';
-import { LinearError } from './protocol/LinearErrors.js';
 import { fetchWithDigest } from './protocol/http.js';
 import { LinearClient, LinearEvent, WebsocketState, type LinearRequestParams } from './protocol/linear.js';
 import { AssignableButtons } from './structures/AssignableButtons.js';
@@ -48,24 +50,15 @@ import { UploadSettings } from './structures/UploadSettings.js';
 import { WhiteBalance } from './structures/WhiteBalance.js';
 import { Zoom } from './structures/Zoom.js';
 
-function isAuthenticationFailed(error: unknown) {
-	if (!(error instanceof LinearError)) return false;
-	return Array.isArray(error.data) && error.data.length === 2 && (error.data[0] === 403 || error.data[0] === 5_001);
-}
-
 async function getNonce(client: SavonaClient) {
-	try {
-		const response = await client.alternate.authentication.getNonce({ timeout: 1_000 });
-		return response.nonce;
-	} catch (error) {
-		console.error('Savona getNonce failed', error);
-		throw error;
-	}
+	const response = await client.alternate.authentication.getNonce({ timeout: 1_000 });
+	return response.nonce;
 }
 
-async function getDigest(nonce: string, baseURL: string, username: string, password: string) {
+async function getDigest(nonce: string, client: SavonaClient, signal: AbortSignal) {
+	const baseURL = client.httpBaseURL;
 	const url = `${baseURL}/cgi-bin/getsavonadigest.cgi?nonce=${nonce}`;
-	const res = (await new DigestClient(username, password).fetch(url)) as Response;
+	const res = await client.fetch(url, { signal });
 	if (!res.ok) {
 		throw new Error(`Received error ${res.status}: ${res.statusText}`);
 	}
@@ -82,18 +75,10 @@ async function getDigest(nonce: string, baseURL: string, username: string, passw
 }
 
 async function requestDigest(client: SavonaClient, digest: { cnonce: string; response: string }) {
-	try {
-		await client.alternate.authentication.digest({
-			params: [digest],
-			timeout: 1_000,
-		});
-	} catch (error) {
-		if (isAuthenticationFailed(error)) {
-			throw error;
-		}
-
-		console.log('Auth NG');
-	}
+	await client.alternate.authentication.digest({
+		params: [digest],
+		timeout: 1_000,
+	});
 }
 
 function formatError(error: unknown) {
@@ -108,6 +93,7 @@ export interface SavonaRequestOptions<Params extends LinearRequestParams = Linea
 }
 
 export const enum SavonaEvent {
+	CacheUpdate = 'cacheUpdate',
 	Connect = 'connect',
 	Debug = 'debug',
 	Disconnect = 'disconnect',
@@ -118,6 +104,7 @@ export const enum SavonaEvent {
 }
 
 export interface SavonaEvents {
+	[SavonaEvent.CacheUpdate]: [structure: SavonaStructureName];
 	[SavonaEvent.Connect]: [];
 	[SavonaEvent.Debug]: [message: string];
 	[SavonaEvent.Disconnect]: [code: number, reason?: Buffer];
@@ -126,6 +113,35 @@ export interface SavonaEvents {
 	[SavonaEvent.Response]: [{ error: unknown; id: number; result: unknown }];
 	[SavonaEvent.Error]: [error: string];
 }
+
+export type SavonaStructureName =
+	| 'assignableButtons'
+	| 'audio'
+	| 'autoBlackBalance'
+	| 'autoUpload'
+	| 'clipInfo'
+	| 'colorBars'
+	| 'deviceInfo'
+	| 'focus'
+	| 'gain'
+	| 'gamma'
+	| 'globalStatus'
+	| 'iris'
+	| 'lensMount'
+	| 'mainBattery'
+	| 'mainFile'
+	| 'mediaCards'
+	| 'ND'
+	| 'record'
+	| 'shutter'
+	| 'slowAndQuick'
+	| 'systemConfig'
+	| 'systemFunctions'
+	| 'systemMessages'
+	| 'uploadJobs'
+	| 'uploadSettings'
+	| 'whiteBalance'
+	| 'zoom';
 
 export interface SavonaNotificationEvents {
 	[name: string]: [data: unknown];
@@ -137,11 +153,15 @@ const ConnectionCheckInterval = 5_000;
 const ConnectionCheckTimeout = 2_000;
 const ConnectionCheckFailureLimit = 3;
 const ConnectionActivityFreshness = 10_000;
+const ReconnectInitialDelay = 1_000;
+const ReconnectMaximumDelay = 30_000;
+const ConnectionAuthenticationTimeout = 10_000;
 
 interface MenuEventRefreshHandler {
 	description: string;
 	eventIds: ReadonlySet<number>;
 	refresh(eventId: number): Promise<unknown> | unknown;
+	structure: SavonaStructureName;
 }
 
 export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
@@ -248,6 +268,16 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 
 	private isManualDisconnect = false;
 
+	private isConnecting = false;
+
+	private connectionAbortController: AbortController | undefined;
+
+	private connectionGeneration = 0;
+
+	private reconnectTimer: NodeJS.Timeout | undefined;
+
+	private reconnectDelay = ReconnectInitialDelay;
+
 	private readonly useSSL;
 
 	private notificationSubscribe;
@@ -284,6 +314,26 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		return this.linear.state;
 	}
 
+	public override emit<EventName extends keyof AsyncEventEmitterPredefinedEvents | keyof SavonaEvents>(
+		eventName: EventName,
+		...args: GetAsyncEventEmitterEventParameters<AsyncEventEmitter<SavonaEvents>, EventName>
+	): boolean;
+	public override emit<EventName extends string | symbol>(
+		eventName: EventName,
+		...args: GetAsyncEventEmitterEventParameters<AsyncEventEmitter<SavonaEvents>, EventName>
+	): boolean;
+	public override emit(eventName: string | symbol, ...args: unknown[]): boolean {
+		if (eventName === SavonaEvent.Error) {
+			args[0] = formatError(args[0]);
+			if (this.listenerCount(SavonaEvent.Error) === 0) {
+				console.error('Savona error:', args[0]);
+				return false;
+			}
+		}
+
+		return super.emit(eventName, ...args);
+	}
+
 	public get httpBaseURL() {
 		return `http${this.useSSL ? 's' : ''}://${this.hostname}`;
 	}
@@ -293,25 +343,58 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	}
 
 	public async connect(timeout?: number) {
+		if (this.isConnecting) throw new Error('A connection attempt is already in progress');
+		this.cancelReconnect();
+		this.reconnectDelay = ReconnectInitialDelay;
+		this.connectionGeneration += 1;
 		this.isManualDisconnect = false;
-		await this.linear.connect(timeout);
 		try {
-			await this.onConnect();
+			await this.establishConnection(timeout);
 		} catch (error) {
 			this.isManualDisconnect = true;
-			try {
-				await this.linear.disconnect();
-			} catch {
-				// The socket may already be closed by the time setup fails.
-			}
-
+			this.cancelReconnect();
 			throw error;
 		}
 	}
 
 	public async disconnect(reconnect = false) {
 		if (!reconnect) this.isManualDisconnect = true;
+		this.connectionGeneration += 1;
+		this.connectionAbortController?.abort(new Error('Connection attempt cancelled'));
+		this.cancelReconnect();
+		this.clearConnectionWork();
 		await this.linear.disconnect();
+		if (reconnect) this.scheduleReconnect();
+	}
+
+	private async establishConnection(timeout?: number) {
+		const generation = this.connectionGeneration;
+		const abortController = new AbortController();
+		this.connectionAbortController = abortController;
+		this.isConnecting = true;
+		try {
+			await this.linear.connect(timeout);
+			if (generation !== this.connectionGeneration || this.isManualDisconnect) {
+				throw new Error('Connection attempt cancelled');
+			}
+
+			await this.onConnect(
+				AbortSignal.any([abortController.signal, AbortSignal.timeout(ConnectionAuthenticationTimeout)]),
+			);
+			if (generation !== this.connectionGeneration || this.isManualDisconnect) {
+				throw new Error('Connection attempt cancelled');
+			}
+
+			this.reconnectDelay = ReconnectInitialDelay;
+			this.checkConnection();
+			this.emit(SavonaEvent.Connect);
+		} catch (error) {
+			if (generation === this.connectionGeneration) await this.linear.disconnect();
+			throw error;
+		} finally {
+			if (this.connectionAbortController === abortController) this.connectionAbortController = undefined;
+			this.isConnecting = false;
+		}
 	}
 
 	public async request(method: string, { timeout, params = [] }: SavonaRequestOptions = {}) {
@@ -322,11 +405,42 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	 * @internal
 	 */
 	public registerMenuEventRefresh(
+		structure: SavonaStructureName,
 		eventIds: readonly number[],
 		description: string,
 		refresh: (eventId: number) => Promise<unknown> | unknown,
 	) {
-		this.menuEventRefreshHandlers.push({ description, eventIds: new Set(eventIds), refresh });
+		this.menuEventRefreshHandlers.push({ structure, description, eventIds: new Set(eventIds), refresh });
+	}
+
+	/**
+	 * @internal
+	 */
+	public registerCacheNotification(
+		structure: SavonaStructureName,
+		emitterName: 'propertyStatusChanged' | 'propertyValueChanged',
+		property: string,
+		update: (data: unknown) => unknown,
+	) {
+		this.notifications[emitterName].on(property, async (data) => {
+			try {
+				await update(data);
+				this.emitCacheUpdate(structure);
+			} catch (error) {
+				this.emitError(`Cache update failed for ${structure} (${property}): ${formatError(error)}`);
+			}
+		});
+	}
+
+	/**
+	 * @internal
+	 */
+	public emitCacheUpdate(structure: SavonaStructureName) {
+		try {
+			this.emit(SavonaEvent.CacheUpdate, structure);
+		} catch (error) {
+			this.emitError(`CacheUpdate listener failed for ${structure}: ${formatError(error)}`);
+		}
 	}
 
 	public async subscribeToNotifications() {
@@ -351,15 +465,10 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		await this.notify.unsubscribe({ params: [NotificationSubscriptions] });
 	}
 
-	private async onConnect() {
+	private async onConnect(signal: AbortSignal) {
 		try {
 			const nonce = await getNonce(this);
-			const digest = await getDigest(
-				nonce,
-				`http${this.useSSL ? 's' : ''}://${this.hostname}`,
-				this.username,
-				this.password,
-			);
+			const digest = await getDigest(nonce, this, signal);
 			await requestDigest(this, digest);
 
 			if (this.notificationSubscribe) {
@@ -372,9 +481,6 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			);
 			throw error;
 		}
-
-		this.checkConnection();
-		this.emit(SavonaEvent.Connect);
 	}
 
 	private setupNotificationErrorHandlers() {
@@ -401,6 +507,7 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	private async refreshMenuEventStatuses() {
 		if (this.isRefreshingMenuEvents) return;
 		this.isRefreshingMenuEvents = true;
+		const generation = this.connectionGeneration;
 
 		try {
 			while (this.pendingMenuEventRefreshIds.size > 0) {
@@ -417,8 +524,10 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 				}
 
 				for (const [handler, eventId] of refreshHandlers) {
+					if (generation !== this.connectionGeneration) return;
 					try {
 						await handler.refresh(eventId);
+						this.emitCacheUpdate(handler.structure);
 					} catch (error) {
 						this.emitError(`Menu event refresh failed for ${handler.description}: ${formatError(error)}`);
 					}
@@ -432,7 +541,6 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	private checkConnection() {
 		clearInterval(this.connectionCheckInterval);
 		this.consecutiveConnectionCheckFailures = 0;
-		this.isConnectionCheckInFlight = false;
 		this.connectionCheckInterval = setInterval(() => {
 			void this.runConnectionCheck();
 		}, ConnectionCheckInterval);
@@ -442,7 +550,9 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		if (this.isConnectionCheckInFlight) return;
 
 		const connectionCheckStartedAt = Date.now();
-		if (connectionCheckStartedAt - this.linear.lastInboundActivityAt < ConnectionActivityFreshness) {
+		const lastInboundActivityAt = this.linear.lastInboundActivityAt;
+		const generation = this.connectionGeneration;
+		if (lastInboundActivityAt > 0 && connectionCheckStartedAt - lastInboundActivityAt < ConnectionActivityFreshness) {
 			this.consecutiveConnectionCheckFailures = 0;
 			return;
 		}
@@ -456,7 +566,8 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 			});
 			this.consecutiveConnectionCheckFailures = 0;
 		} catch (error) {
-			if (this.linear.lastInboundActivityAt > connectionCheckStartedAt) {
+			if (generation !== this.connectionGeneration) return;
+			if (this.linear.lastInboundActivityAt > lastInboundActivityAt) {
 				this.consecutiveConnectionCheckFailures = 0;
 				return;
 			}
@@ -494,25 +605,49 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 	}
 
 	private onDisconnect(code: number, reason?: Buffer) {
+		this.connectionGeneration += 1;
+		this.connectionAbortController?.abort(new Error('WebSocket disconnected during connection setup'));
+		this.clearConnectionWork();
+		this.scheduleReconnect();
+		this.emit(SavonaEvent.Disconnect, code, reason);
+	}
+
+	private clearConnectionWork() {
 		clearInterval(this.connectionCheckInterval);
 		this.connectionCheckInterval = undefined;
-		this.emit(SavonaEvent.Disconnect, code, reason);
-		if (this.isManualDisconnect) return;
-		setTimeout(() => {
+		clearTimeout(this.menuEventRefreshTimer);
+		this.menuEventRefreshTimer = undefined;
+		this.pendingMenuEventRefreshIds.clear();
+	}
+
+	private cancelReconnect() {
+		clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = undefined;
+	}
+
+	private scheduleReconnect() {
+		if (this.isManualDisconnect || this.isConnecting || this.reconnectTimer !== undefined) return;
+		this.reconnectTimer = setTimeout(() => {
+			this.reconnectTimer = undefined;
 			void this.reconnect();
-		}, 1_000);
+		}, this.reconnectDelay);
 	}
 
 	private async reconnect() {
+		if (this.isManualDisconnect || this.isConnecting) return;
 		try {
-			await this.connect();
+			await this.establishConnection();
 		} catch (error) {
+			if (this.isManualDisconnect) return;
 			this.emitError(`Error reconnecting: ${formatError(error)}`);
+			this.reconnectDelay = Math.min(this.reconnectDelay * 2, ReconnectMaximumDelay);
+			this.scheduleReconnect();
 		}
 	}
 
 	private onNotify({ name, data }: { data: unknown; name: string }) {
 		this.emitNotification('raw', name, data);
+		this.emit(SavonaEvent.Notify, { name, data });
 		if (!Array.isArray(data)) {
 			return;
 		}
@@ -589,7 +724,10 @@ export class SavonaClient extends AsyncEventEmitter<SavonaEvents> {
 		}
 	}
 
-	private emitError(error: string) {
+	/**
+	 * @internal
+	 */
+	public emitError(error: string) {
 		if (this.listenerCount(SavonaEvent.Error) === 0) {
 			console.error('Savona error:', error);
 			return;

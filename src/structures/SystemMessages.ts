@@ -45,12 +45,22 @@ export class SystemMessages {
 	public warnings: Record<string, unknown> = {};
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(SystemMessages.ErrorPropertyName, (data) => {
-			this.errors = asRecord(data);
-		});
-		client.notifications.propertyValueChanged.on(SystemMessages.WarningPropertyName, (data) => {
-			this.warnings = asRecord(data);
-		});
+		client.registerCacheNotification(
+			'systemMessages',
+			'propertyValueChanged',
+			SystemMessages.ErrorPropertyName,
+			(data) => {
+				this.errors = asRecord(data);
+			},
+		);
+		client.registerCacheNotification(
+			'systemMessages',
+			'propertyValueChanged',
+			SystemMessages.WarningPropertyName,
+			(data) => {
+				this.warnings = asRecord(data);
+			},
+		);
 	}
 
 	public get activeMessages() {

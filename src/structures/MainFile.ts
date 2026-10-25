@@ -1,16 +1,7 @@
 import type { SavonaClient } from '../savona.js';
 
 export type FormatEncoding =
-	| 'AVCHD'
-	| 'DNxHD'
-	| 'DVCAM'
-	| 'MPEG_IMX'
-	| 'MPEG2_MP4'
-	| 'MPEG2'
-	| 'ProRes'
-	| 'SStP'
-	| 'XAVC'
-	| 'XAVCLong';
+	'AVCHD' | 'DNxHD' | 'DVCAM' | 'MPEG_IMX' | 'MPEG2_MP4' | 'MPEG2' | 'ProRes' | 'SStP' | 'XAVC' | 'XAVCLong';
 
 export class MainFile {
 	public formatWidth: number = -1;
@@ -32,33 +23,78 @@ export class MainFile {
 	public aspectRatioWidth: number = 16;
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.Width', (data) => {
-			this.formatWidth = data as number;
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.Height', (data) => {
-			this.formatHeight = data as number;
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.Encoding', (data) => {
-			this.formatEncoding = data as FormatEncoding;
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.FrameRate', (data) => {
-			this.frameRate = data as string;
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.Scanning.Format', (data) => {
-			this.scanMode = data as 'Interleave' | 'Progressive';
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.Chroma.Subsampling', (data) => {
-			this.subsampling = data as string;
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.BitRate.Value', (data) => {
-			this.bitRate = data as number;
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.AspectRatio.Height', (data) => {
-			this.aspectRatioHeight = data as number;
-		});
-		client.notifications.propertyValueChanged.on('P.Clip.Mediabox.Video.Format.AspectRatio.Width', (data) => {
-			this.aspectRatioWidth = data as number;
-		});
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.Width',
+			(data) => {
+				this.formatWidth = data as number;
+			},
+		);
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.Height',
+			(data) => {
+				this.formatHeight = data as number;
+			},
+		);
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.Encoding',
+			(data) => {
+				this.formatEncoding = data as FormatEncoding;
+			},
+		);
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.FrameRate',
+			(data) => {
+				this.frameRate = data as string;
+			},
+		);
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.Scanning.Format',
+			(data) => {
+				this.scanMode = data as 'Interleave' | 'Progressive';
+			},
+		);
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.Chroma.Subsampling',
+			(data) => {
+				this.subsampling = data as string;
+			},
+		);
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.BitRate.Value',
+			(data) => {
+				this.bitRate = data as number;
+			},
+		);
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.AspectRatio.Height',
+			(data) => {
+				this.aspectRatioHeight = data as number;
+			},
+		);
+		client.registerCacheNotification(
+			'mainFile',
+			'propertyValueChanged',
+			'P.Clip.Mediabox.Video.Format.AspectRatio.Width',
+			(data) => {
+				this.aspectRatioWidth = data as number;
+			},
+		);
 	}
 
 	public async fetchValue() {

@@ -6,7 +6,7 @@ export class LensMount {
 	public connected: boolean = true;
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on(LensMount.PropertyName, (data) => {
+		client.registerCacheNotification('lensMount', 'propertyValueChanged', LensMount.PropertyName, (data) => {
 			this.connected = data !== 'Disconnected';
 		});
 	}

@@ -36,26 +36,27 @@ export class Shutter {
 	public automaticStatus: 'Locked' | 'Unlocked' = 'Unlocked';
 
 	public constructor(public client: SavonaClient) {
-		client.notifications.propertyValueChanged.on('Camera.Shutter.Enabled', async (data) => {
+		client.registerCacheNotification('shutter', 'propertyValueChanged', 'Camera.Shutter.Enabled', async (data) => {
 			this.enabled = data as boolean;
 		});
-		client.notifications.propertyValueChanged.on('Camera.Shutter.Slow.Enabled', async (data) => {
+		client.registerCacheNotification('shutter', 'propertyValueChanged', 'Camera.Shutter.Slow.Enabled', async (data) => {
 			this.slowEnabled = data as boolean;
 			await this.fetchStatus();
 		});
-		client.notifications.propertyValueChanged.on('Camera.Shutter.Slow.Frames', async (data) => {
+		client.registerCacheNotification('shutter', 'propertyValueChanged', 'Camera.Shutter.Slow.Frames', async (data) => {
 			this.slowFrames = data as number;
 		});
-		client.notifications.propertyValueChanged.on('Camera.Shutter.ECS.Enabled', async (data) => {
+		client.registerCacheNotification('shutter', 'propertyValueChanged', 'Camera.Shutter.ECS.Enabled', async (data) => {
 			this.ecsEnabled = data as boolean;
 		});
-		client.notifications.propertyValueChanged.on('Camera.Shutter.Mode', async (data) => {
+		client.registerCacheNotification('shutter', 'propertyValueChanged', 'Camera.Shutter.Mode', async (data) => {
 			this.mode = data as 'Angle' | 'Speed';
 		});
-		client.notifications.propertyValueChanged.on('Camera.Shutter.Value', async (data) => {
+		client.registerCacheNotification('shutter', 'propertyValueChanged', 'Camera.Shutter.Value', async (data) => {
 			this.value = data as string;
 		});
 		client.registerMenuEventRefresh(
+			'shutter',
 			[
 				EVENT_PLAY_UPDATE,
 				EVENT_THUMBNAIL_UPDATE,
@@ -71,13 +72,18 @@ export class Shutter {
 			'Shutter.fetchStatus',
 			async () => this.fetchStatus(),
 		);
-		client.notifications.propertyStatusChanged.on('Camera.Shutter.Enabled', async (data) => {
+		client.registerCacheNotification('shutter', 'propertyStatusChanged', 'Camera.Shutter.Enabled', async (data) => {
 			this.status = data as 'Locked' | 'Unlocked';
 		});
-		client.notifications.propertyStatusChanged.on(Shutter.AutomaticPropertyName, async (data) => {
-			this.automaticStatus = data as 'Locked' | 'Unlocked';
-		});
-		client.notifications.propertyValueChanged.on(Shutter.AutomaticPropertyName, async (data) => {
+		client.registerCacheNotification(
+			'shutter',
+			'propertyStatusChanged',
+			Shutter.AutomaticPropertyName,
+			async (data) => {
+				this.automaticStatus = data as 'Locked' | 'Unlocked';
+			},
+		);
+		client.registerCacheNotification('shutter', 'propertyValueChanged', Shutter.AutomaticPropertyName, async (data) => {
 			this.automaticMode = data as 'Automatic' | 'Manual';
 		});
 	}
